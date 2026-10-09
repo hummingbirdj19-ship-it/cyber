@@ -1,0 +1,6 @@
+Python 3.11+. snake_case. Type hints on public functions. One-line docstring per function.
+No custom crypto: hashlib SHA-256 and the cryptography package Ed25519 only.
+Canonical JSON for anything hashed or signed: sorted keys, separators (",", ":"), ensure_ascii=False, UTF-8.
+Never edit CONTRACT.md without the change protocol. Never edit another person's folder.
+Base model only. Do not add anything listed under Out of Scope in AGENTS.md.
+Do not commit keys, databases, spool files or real data.

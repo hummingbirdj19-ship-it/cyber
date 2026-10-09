@@ -1,0 +1,132 @@
+# CONTRACT v0.1 (base model)
+
+This is the only thing the platform side (Jaganath) and the defence side (Jeev) share. If both sides follow this file, the two halves plug together without meeting in the middle.
+
+## 0. Change protocol
+- Nobody edits this file on their own branch silently.
+- To change it: edit it on a branch named `contract-change-<topic>`, bump the version at the top, message the other person with what changed and why, and merge to main only after they say OK.
+- After a merge, both sides pull main before continuing.
+
+## 1. Time rules
+- All timestamps are UTC, ISO 8601, seconds precision, with a trailing Z: `2026-10-12T09:15:30Z`.
+- `ts` in an event is when it happened at the source. The witness uses its own clock for anything it records.
+- All machines in the demo must sync their clocks (NTP). Clock drift causes false alarms.
+
+## 2. RawEvent (platform -> sidecar)
+The platform side writes one JSON object per line into the spool file `spool/events.jsonl`. UTF-8, one event per line, each line ends with `\n`, the file is only ever appended to.
+
+| field | type | rules |
+|---|---|---|
+| source | string | one of `app`, `db`, `host` |
+| ts | string | UTC time as in section 1 |
+| actor | string | user or account name, `unknown` if there is none |
+| event_type | string | lowercase snake_case, see the list below |
+| details | object | small JSON object. Money amounts are strings, never floats. No passwords, tokens or real personal data. |
+
+Event types for the base model:
+- `app`: `login_success`, `login_failed`, `error`
+- `db`: `transaction_created`, `transaction_updated`, `transaction_deleted`, `account_created`
+- `host`: `http_request` (the web server access log counts as the host source for now)
+
+Rules for the writer of the spool:
+- Write each line with a single write call so lines never interleave.
+- Never rewrite or truncate the spool while the sidecar runs.
+- Order across sources is not guaranteed. The sidecar assigns the order (`seq`).
+- Examples: `samples/events.sample.jsonl`
+
+## 3. Log entry and hash chain (inside the sidecar)
+The sidecar turns each RawEvent into an entry.
+
+Entry fields: `seq` (integer, starts at 0, +1 per entry, no gaps), `ts`, `source`, `actor`, `event_type`, `details`, `prev_hash` (hex), `hash` (hex), plus `received_at` (sidecar clock, stored but not hashed in the base model).
+
+Canonical JSON (used for everything that is hashed or signed):
+- keys sorted, separators `,` and `:` with no spaces, `ensure_ascii=False`, encoded as UTF-8.
+- In Python that is `json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")`.
+
+Hash rule:
+- `hash = SHA-256(canonical_json({seq, ts, source, actor, event_type, details, prev_hash}))`, written as lowercase hex.
+- The first entry (`seq` 0) has `prev_hash` = 64 zero characters.
+
+### Test vectors (built from the first 5 lines of samples/events.sample.jsonl)
+Canonical JSON of entry 0:
+`{"actor":"asha","details":{"ip":"10.0.0.5"},"event_type":"login_success","prev_hash":"0000000000000000000000000000000000000000000000000000000000000000","seq":0,"source":"app","ts":"2026-10-12T09:15:30Z"}`
+
+Entry hashes:
+```
+seq 0  6838b198eaec15fe5a4e73266e04f912bd99c230c81dcae534fd0e3d019a8053
+seq 1  75397be4962e1d5a605cf9bda41ba3cc1e6b8100b2abcc0409b96735e3d44711
+seq 2  20da29a9023ae11b33d97e95c4c2563762cc51aca7dcb7964dd6f70a088e75b3
+seq 3  9b6e549dae35527ebabf1a2a63160c4fce5c4419b67bae7807b0ea28f05d3a6d
+seq 4  5f169c5466e1a9d2f292cd8f6c061c5915f03986deb2ac21be626e562eeaf61b
+```
+
+## 4. Merkle tree and checkpoints
+Merkle tree over entry hashes, RFC 6962 style:
+- leaf = `SHA-256(0x00 || entry_hash_bytes)` where `entry_hash_bytes` is the 32 bytes behind the hex hash.
+- node = `SHA-256(0x01 || left || right)`.
+- For `n` leaves with `n > 1`, split at `k` = the largest power of two strictly smaller than `n`: left = first `k` leaves, right = the rest. A tree with one leaf has that leaf as its root.
+
+Root test vectors (same 5 entries, tree over the first n entries):
+```
+n=1  cb881caff33b24f04627fe6d753ae468524848c8b7576be108f53a7f13150127
+n=2  22d0190096126edcebc54d3a8803eb2f9d65b3b47802b951fc1cebc61dfc9d62
+n=3  e11816ce00bd2bce1fd4cf47d1af346d512011ee63d2b244c5574ddede44c415
+n=4  eb8f45112105cceac05363584b2404429046b6cf6de1cdd8dc4af0dbe039cf6b
+n=5  fa342082214823efae8212916bd68a53efa3740e65dfa7c396ef4ba71472591b
+```
+
+Checkpoint object:
+```
+{"node_id": "node-1", "tree_size": 50, "head_seq": 49, "head_hash": "<hex>", "root_hash": "<hex>", "ts": "<UTC>", "signature": "<hex>"}
+```
+- `tree_size` entries are covered (seq 0 to tree_size - 1), so `head_seq = tree_size - 1`.
+- `signature` = Ed25519 signature (hex) over the canonical JSON of the object without the `signature` field.
+- A checkpoint is created every `every_n` entries or every `every_s` seconds, whichever comes first, if there is at least one new entry.
+
+## 5. Heartbeat and witness API (sidecar -> witness)
+Heartbeat object, sent every `interval_s` seconds (default 30):
+```
+{"node_id": "node-1", "hb_counter": 17, "head_seq": 212, "head_hash": "<hex>", "tree_size": 213, "ts": "<UTC>", "signature": "<hex>"}
+```
+- `hb_counter` starts at 1 and increases by 1 per heartbeat. It is stored by the sidecar so it survives restarts.
+- `signature` works as for checkpoints.
+
+Witness endpoints (JSON in and out):
+- `POST /heartbeat` -> `{"status": "ok"}` or `{"status": "alert", "alerts": [{"code": "...", "detail": "..."}]}`
+- `POST /checkpoint` -> `{"status": "stored"}`
+- `GET /heartbeats?node_id=...&limit=...`, `GET /checkpoints?node_id=...`, `GET /alerts?node_id=...`
+
+The witness trusts only node public keys listed in its `nodes_file`. It stores every valid heartbeat and checkpoint append-only and never overwrites.
+
+Witness alert codes:
+- `BAD_SIGNATURE`: signature does not verify against the node's public key
+- `COUNTER_REPLAY`: `hb_counter` is not greater than the last one seen
+- `SEQ_ROLLBACK`: `head_seq` is lower than the highest seen
+- `FORK`: same `head_seq` seen before with a different `head_hash`
+- `SILENCE`: no valid heartbeat for more than `2 * interval_s + 15` seconds
+
+## 6. Verifier output
+Command: `python -m verifier --config config.toml [--witness URL]`
+
+Output (JSON on stdout):
+```
+{"clean": false, "checked_entries": 212, "verdicts": [{"code": "EDIT", "seq_from": 17, "seq_to": 17, "detail": "..."}]}
+```
+Exit code: 0 clean, 1 tampering found, 2 the verifier itself failed.
+
+Verdict codes:
+- `EDIT`: stored `hash` differs from the hash recomputed from the entry's fields
+- `CHAIN_BREAK`: an entry's `prev_hash` is not the previous entry's `hash`
+- `SEQ_GAP`: `seq` values are not consecutive from 0 (the missing range is reported)
+- `CHECKPOINT_MISMATCH`: Merkle root recomputed from local entries differs from a checkpoint's `root_hash`
+- `BAD_CHECKPOINT_SIGNATURE`: a checkpoint's signature does not verify
+- `TRUNCATION` (needs witness): local `head_seq` is lower than the highest `head_seq` the witness has seen
+- `FORK` (needs witness): local entry hash at a `seq` the witness recorded differs from the witness's `head_hash` for that `seq`
+- `SILENCE` (needs witness): the witness raised a silence alert in the checked period
+
+## 7. Config keys
+See `config.example.toml`. Both sides read the same keys with Python's `tomllib`. Do not rename keys without the change protocol.
+
+## 8. What each side guarantees
+- Platform side: valid RawEvents as in section 2, append-only spool, synthetic data only, a reset script that wipes and reseeds the platform.
+- Defence side: a sidecar that tails the spool and never modifies it, a validator tool the platform side can run (`python -m tools.validate_spool spool/events.jsonl`), and Docker images for the sidecar and witness.

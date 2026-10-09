@@ -1,0 +1,8 @@
+config.toml
+data/
+spool/*.jsonl
+*.key
+.venv/
+__pycache__/
+*.pyc
+.env
