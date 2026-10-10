@@ -165,7 +165,8 @@ Red-team gate
 - [x] Witness for the demo: second laptop (same hotspot, firewall open on 8800, clocks synced)
 - [ ] Platform repo link (Jeev gives it once I1/I2 are in place)
 - [ ] Hacker repo link
-- [ ] Which database the platform uses (decides the next `db_audit` driver after sqlite)
+- [x] Platform database: PostgreSQL 15 (`postgres` driver added to the v0.3 draft). Logs: morgan combined, errors only, stdout only; nginx access log to stdout only
+- [ ] Jaganath's replies and platform changes: docs/PLATFORM_HANDOVER.md
 
 ## Later (out of scope for the base model, see AGENTS.md)
 - Per-entry MAC / key ratchet, external anchoring, forensics/evidence report, dashboard, innovation layer.

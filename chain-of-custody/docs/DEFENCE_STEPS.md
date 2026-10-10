@@ -206,6 +206,8 @@ Hiccups:
 ## I3: Collectors (outline, waits for CONTRACT v0.3 OK)
 - `collectors/` with `json_lines`, `access_log`, `db_audit` as in CONTRACT section 7, run by `coc collect` as the single spool writer. `coc check` layer 5 tests each collector against real data.
 - Done when: Jaganath's platform is protected by a profile alone, with zero defence code changes.
+- Known from the platform (docs/PLATFORM_HANDOVER.md): PostgreSQL 15 (add `psycopg` to requirements), access log in combined format once written to a file, no app log file.
+- Hiccup: parse JSONB/NUMERIC as `Decimal` (psycopg returns exact values; `json.loads` must use `parse_float=Decimal`), then turn them into strings. Going through `float` loses money precision and breaks the no-floats rule.
 
 ## I4: Attack harness against the hacker repo (outline)
 - Every attack script takes its targets as arguments. One script brings the system up, runs each attack, runs the verifier and asserts the expected code.

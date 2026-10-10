@@ -5,7 +5,7 @@ This is the only interface between the defence software (Chain of Custody) and a
 The defence repo holds the master copy of this file. Platform repos (for example the demo bank platform) pin a version of it.
 
 Changelog:
-- v0.3: generic collectors shipped with the defence and configured in the profile (`[[collectors]]`, section 7), so most platforms write no code. `hb_counter` counts send attempts (section 5). The verifier also reports the witness's own FORK and SEQ_ROLLBACK alerts (section 6).
+- v0.3: generic collectors shipped with the defence and configured in the profile (`[[collectors]]`, section 7), so most platforms write no code. `db_audit` supports SQLite and PostgreSQL; `access_log` can map requests to event types with `rules`. `hb_counter` counts send attempts (section 5). The verifier also reports the witness's own FORK and SEQ_ROLLBACK alerts (section 6).
 - v0.2: platform-agnostic. Event types are open (any snake_case) with an optional per-profile allow-list. No floats anywhere in `details`. Added the `[profile]` config section. Two-repo change protocol.
 - v0.1: first version.
 
@@ -165,10 +165,14 @@ Keys for every collector:
 `type = "access_log"` (web server access log):
 - `path` (string). `format` (string): `combined` (the nginx and apache default) is the only format in v0.3.
 - `event_type` (string, default `http_request`). `skip_static` (bool, default true): skip css, js, image and font files.
+- `rules` (list of tables, optional): each has `method`, `path` (exact match, query string removed), `status` (an exact code like `"401"` or a class like `"2xx"`) and `event_type`. The first matching rule sets the event type; a line no rule matches uses `event_type`. Example: `{method = "POST", path = "/api/auth/login", status = "2xx", event_type = "login_success"}`.
 - `details` holds `ip`, `method`, `path` (query string removed, as it may carry tokens) and `status`. `actor` is the log's user field, `unknown` when it is `-`. Times are converted to UTC.
 
 `type = "db_audit"` (an audit table, filled by the platform's own triggers or audit feature):
-- `driver` (string): `sqlite` is the only driver in v0.3; others are added through the change protocol. `path` (string): the database file, opened read-only.
+- `driver` (string): `sqlite` or `postgres`; others are added through the change protocol.
+- `sqlite`: `path` (string), the database file, opened read-only.
+- `postgres`: `dsn_env` (string), the name of an environment variable holding the connection string. The password never goes in the profile. Connect as a user that can only SELECT from the audit table.
+- Numeric columns are read exactly and written as strings (never through a float), as section 2 requires.
 - `table` (string). `id_column` (string): an increasing integer; the collector reads rows with a higher id than the last one seen.
 - `ts_column`, `actor_column`, `event_type_column` (strings), `details_columns` (list of strings).
 - `poll_s` (integer, default 2).
