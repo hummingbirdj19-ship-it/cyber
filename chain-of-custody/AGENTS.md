@@ -1,7 +1,7 @@
 # Project: Chain of Custody (tamper-evident logging, BASE MODEL)
 
 ## Goal
-Hackurity 2026, problem statement 6, 7-day build. A tamper-evident logging system that plugs into an existing platform (Firefly III, an open-source finance app) through a sidecar and a config file, with no change to the app. If an attacker with admin access edits, deletes, reorders or truncates the logs, our verifier detects it and names the attack type. This file covers the BASE MODEL only. Improvements are listed under "Out of scope" and come later.
+Hackurity 2026, problem statement 6, 7-day build. A standalone, platform-agnostic tamper-evident logging system. It sits over any existing platform through a sidecar and one profile (`config.toml`), with no change to the platform and no platform-specific code in the defence. Integration is the main selling point: a platform writes RawEvents to a spool file (CONTRACT.md section 2), and the same defence code protects it. If an attacker with admin access edits, deletes, reorders or truncates the logs, our verifier detects it and names the attack type. This file covers the BASE MODEL only. Improvements are listed under "Out of scope" and come later.
 
 ## Tech Stack
 - Language: Python 3.11+
@@ -10,14 +10,14 @@ Hackurity 2026, problem statement 6, 7-day build. A tamper-evident logging syste
 - Crypto: SHA-256 (hashlib) and Ed25519 (the `cryptography` package). Never write custom crypto.
 - Tests: pytest
 - Packaging: Docker Compose
-- Victim platform: Firefly III run unmodified (fallback: Formance Ledger)
+- Demo platform: a standalone bank-style platform (JP Morgan-like clone) in its own repo. It is only the first integration target; nothing in this repo depends on it.
 
-## Roles and Ownership
-- Jeev: sidecar/, witness/, verifier/, tests/, tools/
-- Jaganath: victim/ (platform, fake data, adapters that write the spool file)
+## Repos and Ownership
+- This repo (defence): sidecar/, witness/, verifier/, tests/, tools/. Owner: Jeev.
+- Platform repo (separate, standalone): the demo platform and its adapters that write the spool. Owner: Jaganath.
 - Red team (third person): attack scripts, later phase
-- Shared: CONTRACT.md. It is the only thing both sides depend on. Change protocol is inside it.
-- Never edit the other person's folders. Work on separate branches: `defence` and `platform`.
+- Shared: CONTRACT.md only. The master copy lives here; platform repos pin a version. Change protocol is inside it.
+- Integrating a new platform means writing adapters on the platform side and a new profile here. It never means changing defence code.
 
 ## Project Structure
 chain-of-custody/
@@ -25,20 +25,19 @@ chain-of-custody/
 ├── CLAUDE.md
 ├── .cursorrules
 ├── README.md
-├── CONTRACT.md              # interfaces both sides follow (read this first)
-├── DEFENCE_STEPS.md         # Jeev's build flow
-├── PLATFORM_STEPS.md        # Jaganath's build flow
-├── config.example.toml
+├── CONTRACT.md              # the interface any platform follows (read this first)
+├── DEFENCE_STEPS.md         # build flow
+├── INTEGRATION.md           # how any platform plugs in (adapters + profile)
+├── config.example.toml      # profile template
 ├── .antigravity/tasks.md
 ├── samples/events.sample.jsonl
-├── spool/                   # runtime: events.jsonl written by adapters (gitignored)
+├── spool/                   # runtime: events.jsonl written by platform adapters (gitignored)
 ├── data/                    # runtime: sqlite files and keys (gitignored)
 ├── sidecar/                 # canon.py store.py ingest.py merkle.py keys.py checkpoint.py heartbeat.py main.py
 ├── witness/                 # app.py checks.py store.py
 ├── verifier/                # __main__.py checks.py
 ├── tools/                   # gen_events.py validate_spool.py
-├── tests/
-└── victim/                  # docker-compose.yml, seed/, adapters/, scripts/, NOTES.md
+└── tests/
 
 ## Coding Conventions
 - snake_case for functions and files, type hints on public functions, a one-line docstring on every function
@@ -46,6 +45,7 @@ chain-of-custody/
 - Timestamps are UTC ISO 8601 with a trailing Z.
 - Hash and signature inputs always use the canonical JSON defined in CONTRACT.md.
 - One responsibility per module. Keep modules under about 200 lines.
+- Platform-agnostic: no platform names, table names, URLs or event-type special cases in code. Anything platform-dependent goes in the profile (`config.toml`).
 
 ## Agent Behaviour Rules
 - Read CONTRACT.md before touching anything that crosses the sidecar/platform boundary.

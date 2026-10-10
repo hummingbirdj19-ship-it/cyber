@@ -1,6 +1,6 @@
 # DEFENCE STEPS (Jeev): base model
 
-You build: sidecar/, witness/, verifier/, tests/, tools/. You do not touch victim/.
+You build: sidecar/, witness/, verifier/, tests/, tools/. The defence is standalone and platform-agnostic: same code for every platform, only the profile (`config.toml`) differs. No platform-specific code anywhere.
 Read CONTRACT.md first. Every step has: Build, Done when, Hiccups.
 
 ## How to use this file with Claude or Antigravity
@@ -11,10 +11,11 @@ Open the repo as the workspace and start each step with:
 When stuck, paste: the step number, the exact error, what you expected. Ask the agent to explain the cause before any fix.
 
 ## Working separately: how this stays compatible
-- You never wait for Jaganath. Until his real spool exists, your own generator (Step 1) feeds the sidecar.
-- Sync A (end of day 1): he commits `samples/events.sample.jsonl` built from real platform actions. Compare it with your generator output and fix any difference through the contract change protocol.
-- Sync B: point `spool_path` at his real spool. If the validator passes and the verifier says clean, you are compatible.
-- Commit often to branch `defence`. Merge to main only at sync points.
+- The defence never depends on a specific platform. Until a real spool exists, your own generator (Step 1) feeds the sidecar.
+- The demo platform (bank-style clone) lives in its own repo and is just the first integration. See INTEGRATION.md for what any platform must do.
+- Integration check A: the platform team commits real events to their repo; run `python -m tools.validate_spool <their file>` against them. Any difference from the contract goes through the change protocol.
+- Integration check B: write a profile for the platform, point `spool_path` at its real spool. If the validator passes and the verifier says clean, it is integrated, with zero code changes.
+- Commit often. Merge to main at integration checks.
 
 ---
 
@@ -32,15 +33,15 @@ Hiccups:
 
 ## D1: Fake event generator and spool validator
 Build:
-- `tools/gen_events.py`: writes valid RawEvents (CONTRACT section 2) to the spool path at a configurable rate. Mix of sources and event types like the sample file.
-- `tools/validate_spool.py`: reads a spool file and reports every line that breaks the contract (bad JSON, missing field, wrong type, unknown source, bad timestamp, float amount). Runnable as `python -m tools.validate_spool <path>`. Exit code 0 if all lines pass.
-- Share the validator with Jaganath as soon as it works. It is his acceptance test.
+- `tools/gen_events.py`: writes valid RawEvents (CONTRACT section 2) to the spool path at a configurable rate. Mix of sources and event types like the sample file, plus some non-standard snake_case event types to prove the defence is platform-agnostic.
+- `tools/validate_spool.py`: reads a spool file and reports every line that breaks the contract (bad JSON, missing field, wrong type, unknown source, bad timestamp, event_type not snake_case, a float anywhere in `details`). With `--config`, also enforce the profile's `event_types` allow-list if it is non-empty. Runnable as `python -m tools.validate_spool <path> [--config config.toml]`. Exit code 0 if all lines pass.
+- The validator is the acceptance test for any platform integration. Share it with every integrator.
 
-Done when: the validator passes on `samples/events.sample.jsonl` and on a 1,000 line generated file, and fails on a file where you break a line on purpose.
+Done when: the validator passes on `samples/events.sample.jsonl` and on a 1,000 line generated file, fails on a file where you break a line on purpose, and with an allow-list profile rejects an event type not on the list.
 
 Hiccups:
 - Timestamp check: require the trailing `Z` and seconds precision. `datetime.fromisoformat` handles `Z` only from Python 3.11.
-- Amounts must be strings: check `isinstance(..., str)` for any `amount`, `old`, `new` field.
+- Floats: walk `details` recursively and reject any `float`. This covers money fields on every platform without knowing their names. Note `bool` is not a float, and integers are allowed.
 
 ## D2: Canonical JSON and the hash-chained store
 Build:
@@ -63,7 +64,7 @@ Done when: run the generator and the sidecar together. Entry count grows with th
 
 Hiccups:
 - A half-written last line: read in binary and only consume up to the last `\n`.
-- A bad line in the spool: log it, skip it, keep going. Never crash the sidecar on one bad line.
+- A bad line in the spool: log it, skip it, keep going. Never crash the sidecar on one bad line. Use the same checks as the validator (including the profile allow-list), so behaviour is identical on every platform.
 - Spool file replaced or shrunk: for the base model, print a loud error and stop. Handling it properly is later work.
 
 ## D4: Merkle tree, keys and signed checkpoints
@@ -136,15 +137,15 @@ Hiccups:
 
 ## D10: Docker packaging
 Build:
-- `sidecar/Dockerfile` and `witness/Dockerfile` (small Python images), and a snippet `defence-compose.yml` with two services: `sidecar` (mounts `./spool` read-only and `./data`) and `witness` (its own volume, port 8800).
-- Sidecar reads its settings from `config.toml` mounted into the container.
+- `sidecar/Dockerfile` and `witness/Dockerfile` (small Python images), and a standalone `defence-compose.yml` with two services: `sidecar` (mounts a spool folder read-only, `./data`, and the profile `config.toml`) and `witness` (its own volume, port 8800).
+- The spool folder and profile are the only things that change per platform. Any platform's compose file can include or reference `defence-compose.yml` unchanged.
 
-Done when: `docker compose -f defence-compose.yml up` starts both, the generator (run on the host) feeds the spool, and the verifier on the host reports clean.
+Done when: `docker compose -f defence-compose.yml up` starts both, the generator (run on the host) feeds the spool, and the verifier on the host reports clean. Swapping in a second profile needs no rebuild.
 
 Hiccups:
 - File permissions on mounted volumes (Linux): run the container with your user id or `chmod` the folder.
 - Inside Compose the witness URL is `http://witness:8800`, not `localhost`.
-- Give Jaganath the compose snippet and the two image names as soon as they build.
+- Publish the compose file and image names in INTEGRATION.md as soon as they build.
 
 ---
 
@@ -152,7 +153,7 @@ Hiccups:
 - All of D0 to D10 pass their checks.
 - `pytest` is green.
 - The README quickstart is true.
-- Sync C is done and the red team has access.
+- Integration check B passes on the demo platform with zero defence code changes, and the red team has access.
 
 ## Later (do not start yet)
 Key ratchet and per-entry MAC; external anchor; tamper forensics report; erasure support; dashboard; multi-node; rotation handling.

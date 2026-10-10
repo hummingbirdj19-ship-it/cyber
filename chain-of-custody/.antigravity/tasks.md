@@ -1,41 +1,28 @@
-# Task List: Chain of Custody (base model)
+# Task List: Chain of Custody (base model, defence repo)
 
-Step details live in DEFENCE_STEPS.md and PLATFORM_STEPS.md. Tick a box only when its "Done when" check passes.
+Step details live in DEFENCE_STEPS.md. Integration details live in INTEGRATION.md. Tick a box only when its "Done when" check passes.
 
-## Sync 0: before splitting
-- [ ] Both read CONTRACT.md and agree. Commit it to main.
-- [ ] Branches created: `defence`, `platform`
+## Contract
+- [x] CONTRACT v0.1 agreed
+- [ ] CONTRACT v0.2 (platform-agnostic) approved by platform integrator and merged
 
-## Defence (Jeev)
-- [ ] D0 repo and environment
-- [ ] D1 fake event generator and spool validator
-- [ ] D2 canonical JSON and hash-chained store
-- [ ] D3 ingest from the spool file
-- [ ] D4 Merkle tree, keys, signed checkpoints
-- [ ] D5 verifier v1 (offline checks)
-- [ ] D6 witness service
-- [ ] D7 heartbeat client and checkpoint upload
+## Defence
+- [x] D0 repo and environment
+- [x] D1 fake event generator and spool validator (profile-aware)
+- [x] D2 canonical JSON and hash-chained store
+- [x] D3 ingest from the spool file
+- [x] D4 Merkle tree, keys, signed checkpoints
+- [x] D5 verifier v1 (offline checks)
+- [x] D6 witness service
+- [x] D7 heartbeat client and checkpoint upload
 - [ ] D8 verifier v2 (truncation, fork, silence)
 - [ ] D9 self-test tampering suite
-- [ ] D10 Docker packaging
+- [ ] D10 Docker packaging (standalone defence-compose.yml)
 
-## Platform (Jaganath)
-- [ ] P0 platform running in Docker
-- [ ] P1 what each action leaves behind (NOTES.md)
-- [ ] P2 fake user data seeded
-- [ ] P3 live traffic simulator
-- [ ] P4 database change adapter
-- [ ] P5 app log adapter
-- [ ] P6 web server log adapter ("host" source for now)
-- [ ] P7 single spool writer passes the validator
-- [ ] P8 compose override with sidecar and witness
-- [ ] P9 reset and snapshot scripts
-- [ ] P10 attacker access notes for the red team
-
-## Sync points
-- [ ] Sync A (end of day 1): samples/events.sample.jsonl replaced with real events
-- [ ] Sync B: real spool feeds the real sidecar, verifier reports clean
-- [ ] Sync C: full compose stack up, red team gets access
+## Integration checks (demo bank-style platform, separate repo)
+- [ ] Check A: real platform events pass `tools.validate_spool`
+- [ ] Check B: profile written, real spool feeds the sidecar, verifier reports clean, zero defence code changes
+- [ ] Check C: full stack up, red team gets access
 
 ## Later (not now)
 - [ ] Key ratchet and per-entry MAC

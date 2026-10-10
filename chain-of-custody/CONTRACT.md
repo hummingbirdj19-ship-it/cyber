@@ -1,11 +1,17 @@
-# CONTRACT v0.1 (base model)
+# CONTRACT v0.2 (base model)
 
-This is the only thing the platform side (Jaganath) and the defence side (Jeev) share. If both sides follow this file, the two halves plug together without meeting in the middle.
+This is the only interface between the defence software (Chain of Custody) and any platform it protects. The defence is standalone and platform-agnostic: it never contains platform-specific code. A platform integrates by (1) writing RawEvents (section 2) to a spool file and (2) supplying a profile, which is a `config.toml` (section 7). Same code and logic for every platform, only the profile differs.
+
+The defence repo holds the master copy of this file. Platform repos (for example the demo bank platform) pin a version of it.
+
+Changelog:
+- v0.2: platform-agnostic. Event types are open (any snake_case) with an optional per-profile allow-list. No floats anywhere in `details`. Added the `[profile]` config section. Two-repo change protocol.
+- v0.1: first version.
 
 ## 0. Change protocol
-- Nobody edits this file on their own branch silently.
-- To change it: edit it on a branch named `contract-change-<topic>`, bump the version at the top, message the other person with what changed and why, and merge to main only after they say OK.
-- After a merge, both sides pull main before continuing.
+- Nobody edits this file silently.
+- To change it: edit it in the defence repo on a branch named `contract-change-<topic>`, bump the version at the top, add a changelog line, message every platform integrator with what changed and why, and merge to main only after they say OK.
+- After a merge, platform repos update their pinned copy before continuing.
 
 ## 1. Time rules
 - All timestamps are UTC, ISO 8601, seconds precision, with a trailing Z: `2026-10-12T09:15:30Z`.
@@ -13,17 +19,19 @@ This is the only thing the platform side (Jaganath) and the defence side (Jeev) 
 - All machines in the demo must sync their clocks (NTP). Clock drift causes false alarms.
 
 ## 2. RawEvent (platform -> sidecar)
-The platform side writes one JSON object per line into the spool file `spool/events.jsonl`. UTF-8, one event per line, each line ends with `\n`, the file is only ever appended to.
+The platform's adapters write one JSON object per line into the spool file (path set by `spool_path` in the profile, default `spool/events.jsonl`). UTF-8, one event per line, each line ends with `\n`, the file is only ever appended to.
 
 | field | type | rules |
 |---|---|---|
-| source | string | one of `app`, `db`, `host` |
+| source | string | one of `app`, `db`, `host` (the layer the event came from, the same for every platform) |
 | ts | string | UTC time as in section 1 |
 | actor | string | user or account name, `unknown` if there is none |
-| event_type | string | lowercase snake_case, see the list below |
-| details | object | small JSON object. Money amounts are strings, never floats. No passwords, tokens or real personal data. |
+| event_type | string | lowercase snake_case, matching `^[a-z][a-z0-9_]*$` |
+| details | object | small JSON object. No floats anywhere inside it, at any depth: money amounts and other decimals are strings. No passwords, tokens or real personal data. |
 
-Event types for the base model:
+Event types are open: any platform may use its own names. If the profile sets `[profile] event_types` to a non-empty list, only those names are valid for that profile. An empty or missing list means any snake_case name is valid.
+
+Recommended common names (use these when they fit, so verdicts read the same across platforms):
 - `app`: `login_success`, `login_failed`, `error`
 - `db`: `transaction_created`, `transaction_updated`, `transaction_deleted`, `account_created`
 - `host`: `http_request` (the web server access log counts as the host source for now)
@@ -124,9 +132,13 @@ Verdict codes:
 - `FORK` (needs witness): local entry hash at a `seq` the witness recorded differs from the witness's `head_hash` for that `seq`
 - `SILENCE` (needs witness): the witness raised a silence alert in the checked period
 
-## 7. Config keys
-See `config.example.toml`. Both sides read the same keys with Python's `tomllib`. Do not rename keys without the change protocol.
+## 7. Config keys (the profile)
+See `config.example.toml`. One `config.toml` is one platform profile. Everything platform-dependent lives here and nowhere else. Read with Python's `tomllib`. Do not rename keys without the change protocol.
+
+`[profile]` section:
+- `name` (string): a label for the platform, for humans only. The defence never branches on it.
+- `event_types` (list of strings): optional allow-list as in section 2. Empty means any snake_case name.
 
 ## 8. What each side guarantees
-- Platform side: valid RawEvents as in section 2, append-only spool, synthetic data only, a reset script that wipes and reseeds the platform.
-- Defence side: a sidecar that tails the spool and never modifies it, a validator tool the platform side can run (`python -m tools.validate_spool spool/events.jsonl`), and Docker images for the sidecar and witness.
+- Platform (any integrator): valid RawEvents as in section 2, append-only spool, synthetic data only in demos, a profile (`config.toml`) for its deployment.
+- Defence: a sidecar that tails the spool and never modifies it, no platform-specific code, a validator any integrator can run (`python -m tools.validate_spool <spool> [--config config.toml]`), and Docker images for the sidecar and witness.

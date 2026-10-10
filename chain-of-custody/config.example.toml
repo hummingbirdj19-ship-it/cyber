@@ -1,4 +1,9 @@
 # Copy to config.toml. Never commit config.toml or anything under data/.
+# One config.toml = one platform profile. Same defence code for every platform.
+[profile]
+name = "example-platform"   # label for humans only
+event_types = []            # optional allow-list; empty = any snake_case event_type
+
 [node]
 node_id = "node-1"
 
