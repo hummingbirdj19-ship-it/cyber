@@ -16,7 +16,7 @@ Hackurity 2026, problem statement 6, 7-day build. A standalone, platform-agnosti
 - This repo (defence): sidecar/, witness/, verifier/, tests/, tools/. Owner: Jeev.
 - Platform repo (separate, standalone): the demo platform and its adapters that write the spool. Owner: Jaganath.
 - Red team (third person): attack scripts, later phase
-- Shared: CONTRACT.md only. The master copy lives here; platform repos pin a version. Change protocol is inside it.
+- Shared: docs/CONTRACT.md only. The master copy lives here; platform repos pin a version. Change protocol is inside it.
 - Integrating a new platform means writing adapters on the platform side and a new profile here. It never means changing defence code.
 
 ## Project Structure
@@ -25,10 +25,15 @@ chain-of-custody/
 ├── CLAUDE.md
 ├── .cursorrules
 ├── README.md
-├── CONTRACT.md              # the interface any platform follows (read this first)
-├── DEFENCE_STEPS.md         # build flow
-├── INTEGRATION.md           # how any platform plugs in (adapters + profile)
+├── docs/
+│   ├── CONTRACT.md          # the interface any platform follows (read this first)
+│   ├── DEFENCE_STEPS.md     # build flow
+│   ├── INTEGRATION.md       # how any platform plugs in (adapters + profile)
+│   ├── HANDOFF.md           # state between agents, red-team gates, findings log
+│   └── red-team/            # full red-team reports
 ├── config.example.toml      # profile template
+├── witness_nodes.example.toml
+├── defence-compose.yml
 ├── .antigravity/tasks.md
 ├── samples/events.sample.jsonl
 ├── spool/                   # runtime: events.jsonl written by platform adapters (gitignored)
@@ -48,7 +53,7 @@ chain-of-custody/
 - Platform-agnostic: no platform names, table names, URLs or event-type special cases in code. Anything platform-dependent goes in the profile (`config.toml`).
 
 ## Agent Behaviour Rules
-- Read CONTRACT.md before touching anything that crosses the sidecar/platform boundary.
+- Read docs/CONTRACT.md before touching anything that crosses the sidecar/platform boundary.
 - Work on one step at a time from the step file. State which step you are on.
 - Plan before writing. Run the tests for the step before calling it done.
 - Do not delete files without asking. Do not change CONTRACT.md without the change protocol.

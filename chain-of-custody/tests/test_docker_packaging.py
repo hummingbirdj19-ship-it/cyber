@@ -40,7 +40,7 @@ def test_defence_compose_structure() -> None:
 
 def test_integration_docs_publish_docker_details() -> None:
     """Verify INTEGRATION.md documents the compose file, image names, and witness URL."""
-    path = Path("INTEGRATION.md")
+    path = Path("docs/INTEGRATION.md")
     assert path.exists()
     content = path.read_text(encoding="utf-8")
     assert "defence-compose.yml" in content

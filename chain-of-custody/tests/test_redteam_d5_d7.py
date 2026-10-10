@@ -1,4 +1,4 @@
-"""Regression tests for the D5-D7 red-team findings (see RED_TEAM_D5_D7.md, one test per RT id)."""
+"""Regression tests for the D5-D7 red-team findings (see docs/red-team/RED_TEAM_D5_D7.md, one test per RT id)."""
 import json
 import random
 import sqlite3

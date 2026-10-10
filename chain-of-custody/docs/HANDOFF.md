@@ -7,7 +7,8 @@ Status key: [ ] todo, [~] in progress, [x] done, [!] red team broke it, needs fi
 
 ## Current state
 - Current step: D0-D10 built and reviewed; red-team gates await Jeev's ticks. D10 "Done when" (`docker compose up`) still needs one run on a machine with Docker. Next: "After D10" below
-- Last agent: Claude (red team + blue team on D8-D10, see RED_TEAM_D8_D10.md; earlier: RED_TEAM_D0_D4.md, RED_TEAM_D5_D7.md)
+- Last agent: Claude (moved all docs into docs/ and the red-team reports into docs/red-team/; no code changes, pytest 157 passed. Before that: red team + blue team on D8-D10, see docs/red-team/RED_TEAM_D8_D10.md)
+- Layout: README, AGENTS.md, CLAUDE.md stay at the root (agents load them there); .antigravity/tasks.md stays where Antigravity reads it
 - Last commit reviewed: 4c32d6b plus Antigravity's uncommitted D8-D10 work; D8-D10 and fixes in 29141c8 (pushed); pytest 157 passed (one unexplained single failure in 10 runs, did not repeat)
 - Open bugs: none known. Not yet verified: image build and compose up (no Docker on the review machine), Linux file ownership (RT-38)
 - Contract note (RT-24): hb_counter now increases by 1 per send attempt, so the witness can see gaps after failed sends. Witness rules unchanged; CONTRACT section 5 wording "increases by 1 per heartbeat" could be clarified via the change protocol
@@ -199,4 +200,4 @@ Red-team gate
 | D10 | RT-35 Witness on the same host in demo compose | WEAKENS: host admin can reach it | accepted for demo, documented |
 | D10 | RT-38 Root-owned data/ on Linux | WEAKENS: host verifier may not open DB | documented, untested |
 
-Full detail (why it broke, plan, verification): RED_TEAM_D0_D4.md (RT-01 to RT-16, including nitpicks RT-09, RT-14 to RT-16) RED_TEAM_D5_D7.md (RT-17 to RT-27, including nitpicks RT-22, RT-27) and RED_TEAM_D8_D10.md (RT-28 to RT-38, plus RT-16 and RT-27 closed)
+Full detail (why it broke, plan, verification), all in docs/red-team/: RED_TEAM_D0_D4.md (RT-01 to RT-16, including nitpicks RT-09, RT-14 to RT-16) RED_TEAM_D5_D7.md (RT-17 to RT-27, including nitpicks RT-22, RT-27) and RED_TEAM_D8_D10.md (RT-28 to RT-38, plus RT-16 and RT-27 closed)

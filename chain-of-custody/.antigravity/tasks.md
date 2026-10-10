@@ -1,6 +1,6 @@
 # Task List: Chain of Custody (base model, defence repo)
 
-Step details live in DEFENCE_STEPS.md. Integration details live in INTEGRATION.md. Tick a box only when its "Done when" check passes.
+Step details live in docs/DEFENCE_STEPS.md. Integration details live in docs/INTEGRATION.md. Tick a box only when its "Done when" check passes.
 
 ## Contract
 - [x] CONTRACT v0.1 agreed

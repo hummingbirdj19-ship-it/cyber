@@ -1,7 +1,7 @@
 # Claude Instructions for Chain of Custody
 
 ## Role
-Senior developer and reviewer on this project. You have the goal and stack from AGENTS.md and the interfaces from CONTRACT.md.
+Senior developer and reviewer on this project. You have the goal and stack from AGENTS.md and the interfaces from docs/CONTRACT.md.
 
 ## Working style
 - Jeev writes the code. Do not hand over finished implementations by default.

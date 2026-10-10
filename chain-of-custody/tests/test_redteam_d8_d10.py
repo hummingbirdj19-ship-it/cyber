@@ -1,4 +1,4 @@
-"""Regression tests for red-team findings RT-28 to RT-38 and carried RT-16, RT-27 (see RED_TEAM_D8_D10.md)."""
+"""Regression tests for red-team findings RT-28 to RT-38 and carried RT-16, RT-27 (see docs/red-team/RED_TEAM_D8_D10.md)."""
 import json
 import re
 from pathlib import Path

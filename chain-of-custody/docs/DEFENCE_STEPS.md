@@ -6,7 +6,7 @@ Read CONTRACT.md first. Every step has: Build, Done when, Hiccups.
 ## How to use this file with Claude or Antigravity
 Open the repo as the workspace and start each step with:
 
-> Read AGENTS.md, CLAUDE.md, CONTRACT.md and DEFENCE_STEPS.md. We are on Step N. Explain what it needs and why, then wait for me to write it.
+> Read AGENTS.md, CLAUDE.md, docs/CONTRACT.md and docs/DEFENCE_STEPS.md. We are on Step N. Explain what it needs and why, then wait for me to write it.
 
 When stuck, paste: the step number, the exact error, what you expected. Ask the agent to explain the cause before any fix.
 

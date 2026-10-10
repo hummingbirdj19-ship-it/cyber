@@ -1,4 +1,4 @@
-"""Regression tests for the D0-D4 red-team findings (see RED_TEAM_D0_D4.md, one test per RT id)."""
+"""Regression tests for the D0-D4 red-team findings (see docs/red-team/RED_TEAM_D0_D4.md, one test per RT id)."""
 import hashlib
 import json
 import random
