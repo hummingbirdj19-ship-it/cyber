@@ -155,5 +155,61 @@ Hiccups:
 - The README quickstart is true.
 - Integration check B passes on the demo platform with zero defence code changes, and the red team has access.
 
+## Integration-ready steps (I0 to I4)
+Goal: any platform plugs in with a profile only. Same code, different profile. Docker only (no pip): the `coc` wrapper runs the CLI inside the image. The witness runs on a second laptop.
+
+## I0: Contract and ownership (no code)
+Build:
+- AGENTS.md: collectors move from platform side to defence side; `coc/` and `collectors/` added to the structure.
+- CONTRACT v0.3 draft on branch `contract-change-collectors`: `[[collectors]]` (section 7), RT-24 `hb_counter` wording (section 5), RT-28 verifier mapping (section 6), guarantees (section 8).
+- Jeev messages Jaganath with the diff, asking to approve v0.2 and v0.3 together.
+
+Done when: Jaganath says OK. I1 and I2 do not depend on it; I3 waits for it.
+
+## I1: `coc init` and `coc check`
+Build:
+- New package `coc/`: `cli.py` (argument parsing, `python -m coc <command>`), `init.py`, `check.py`, `profile.py`.
+- `coc/profile.py`: one schema for the whole profile (every section and key in CONTRACT section 7, with types and defaults). Loads `config.toml` and returns either the parsed profile or a list of errors. Unknown keys are errors (a typo like `intervl_s` must not be silently ignored). `coc check` and `sidecar.main` both use it, so a profile that passes the check also starts the sidecar.
+- `coc init [--node-id ID] [--spool PATH] [--witness-url URL] [--force]`:
+  - Writes `config.toml` from `config.example.toml` with the flags filled in.
+  - Generates the Ed25519 key pair at the profile's key paths. This replaces the long one-liner in INTEGRATION.md section 5.
+  - Writes `data/witness_nodes.toml` with `node_id = "<public key hex>"`.
+  - Prints next steps: the exact line to put in `witness_nodes.toml` on the witness laptop, the witness URL to set, then `coc check`.
+  - Second run: anything that already exists is left alone and reported; only missing pieces are created. `--force` regenerates, but is refused while the sidecar DB exists (a new key against an existing chain looks like a fork to the witness, and silent key rotation is what RT-12 closed).
+  - Private key: `chmod 600` on Linux and macOS. On Windows, print that file permissions are not enforced. The key is never printed.
+- `coc check [--config config.toml]`. Layers, cheapest first; a failing layer stops the later ones that depend on it:
+  1. Profile: TOML syntax (with line number, from `tomllib`), then types, missing and unknown keys, by key path (`heartbeat.interval_s: expected integer, got string`). No stack traces.
+  2. Paths: key files exist and match each other, data folder writable, spool readable. A missing or empty spool is a WARNING, not a failure (on a fresh install the platform has not written yet).
+  3. Spool: lines follow CONTRACT section 2 (reuse `tools.validate_spool`).
+  4. Witness: `GET /heartbeats?node_id=<id>` with a 3 s timeout. Unreachable: explain what to check (the witness laptop's IP, port 8800, its firewall, both laptops on the same network or hotspot). Reachable but no heartbeats yet for this node: WARNING, plus a reminder that the node's key must be in the witness's `witness_nodes.toml`.
+  5. Collectors: placeholder, filled in by I3.
+  - Read only: `coc check` never creates or changes the DB, spool, offsets or keys, and never POSTs to the witness (a heartbeat would use up an `hb_counter` value).
+  - Output: one line per check (PASS, WARN, FAIL). Exit 0 if nothing failed, 1 if a check failed, 2 if the tool itself crashed (same meaning as the verifier).
+- `coc.ps1` and `coc.sh` in the repo root: run `docker run --rm -v <current folder>:/work -w /work <sidecar image> python -m coc <args>`.
+- Fix on the witness side: refuse to start, with a clear message, if `nodes_file` is missing or is a folder (Docker creates a folder when the file is missing).
+
+Done when:
+- On a fresh clone, `coc init` and then `coc check` pass with no manual edits (with the witness running; spool warnings allowed).
+- A broken profile gives one clear error each for: a typo'd key, a wrong type, a missing key file, a TOML syntax error.
+- With the witness laptop off or unreachable, `coc check` fails within about 5 s with the network checklist, never hangs.
+- Each of the above is a pytest test.
+
+Hiccups:
+- `tomllib` gives line numbers only for syntax errors. For type errors, the key path is enough; do not add a TOML library for line numbers.
+- Paths inside the wrapper: the container sees the current folder as `/work`, so keep profile paths relative (as `config.example.toml` does). Windows paths with a drive letter will not resolve inside the container.
+- Do not reuse `init_db` in `coc check`: it creates the DB if it is missing. Open SQLite read-only (`file:...?mode=ro`, `uri=True`).
+
+## I2: Split compose and publish images (outline, detail before starting)
+- `sidecar-compose.yml` runs next to the platform; `witness-compose.yml` runs on the witness laptop. Images use `image:` from GitHub Container Registry, not `build:`.
+- Done when: on the second laptop, only the witness compose file, the `coc` wrapper and `witness_nodes.toml` are needed; the platform laptop needs no clone of this repo.
+
+## I3: Collectors (outline, waits for CONTRACT v0.3 OK)
+- `collectors/` with `json_lines`, `access_log`, `db_audit` as in CONTRACT section 7, run by `coc collect` as the single spool writer. `coc check` layer 5 tests each collector against real data.
+- Done when: Jaganath's platform is protected by a profile alone, with zero defence code changes.
+
+## I4: Attack harness against the hacker repo (outline)
+- Every attack script takes its targets as arguments. One script brings the system up, runs each attack, runs the verifier and asserts the expected code.
+- Done when: every attack either gets the right verdict or is logged in HANDOFF.md as outside the trust model, and every attack that got through has a fix and a regression test.
+
 ## Later (do not start yet)
 Key ratchet and per-entry MAC; external anchor; tamper forensics report; erasure support; dashboard; multi-node; rotation handling.

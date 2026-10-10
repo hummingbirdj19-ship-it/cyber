@@ -1,7 +1,7 @@
 # Project: Chain of Custody (tamper-evident logging, BASE MODEL)
 
 ## Goal
-Hackurity 2026, problem statement 6, 7-day build. A standalone, platform-agnostic tamper-evident logging system. It sits over any existing platform through a sidecar and one profile (`config.toml`), with no change to the platform and no platform-specific code in the defence. Integration is the main selling point: a platform writes RawEvents to a spool file (CONTRACT.md section 2), and the same defence code protects it. If an attacker with admin access edits, deletes, reorders or truncates the logs, our verifier detects it and names the attack type. This file covers the BASE MODEL only. Improvements are listed under "Out of scope" and come later.
+Hackurity 2026, problem statement 6, 7-day build. A standalone, platform-agnostic tamper-evident logging system. It sits over any existing platform through a sidecar and one profile (`config.toml`), with no change to the platform and no platform-specific code in the defence. Integration is the main selling point: the profile's collectors read the evidence the platform already leaves (log files, an audit table) and write RawEvents to a spool file (docs/CONTRACT.md sections 2 and 7), and the same defence code protects it. Integrating a platform means writing a profile, not code. If an attacker with admin access edits, deletes, reorders or truncates the logs, our verifier detects it and names the attack type. This file covers the BASE MODEL only. Improvements are listed under "Out of scope" and come later.
 
 ## Tech Stack
 - Language: Python 3.11+
@@ -9,15 +9,16 @@ Hackurity 2026, problem statement 6, 7-day build. A standalone, platform-agnosti
 - Storage: SQLite (stdlib sqlite3) for the sidecar log and the witness store
 - Crypto: SHA-256 (hashlib) and Ed25519 (the `cryptography` package). Never write custom crypto.
 - Tests: pytest
-- Packaging: Docker Compose
+- Packaging: Docker Compose. Docker only for the hackathon (no pip package); the `coc` wrapper script (`coc.ps1` / `coc.sh`) runs the CLI inside the image.
+- Setup and checks: the `coc` CLI (`coc init`, `coc check`, later `coc collect`)
 - Demo platform: a standalone bank-style platform (JP Morgan-like clone) in its own repo. It is only the first integration target; nothing in this repo depends on it.
 
 ## Repos and Ownership
-- This repo (defence): sidecar/, witness/, verifier/, tests/, tools/. Owner: Jeev.
-- Platform repo (separate, standalone): the demo platform and its adapters that write the spool. Owner: Jaganath.
+- This repo (defence): sidecar/, witness/, verifier/, collectors/, coc/, tests/, tools/. Owner: Jeev. Collectors (generic, profile-configured) live here since CONTRACT v0.3.
+- Platform repo (separate, standalone): the demo platform. It leaves evidence the collectors read (logs, an audit table); it writes its own spool adapters only if no collector fits. Owner: Jaganath.
 - Red team (third person): attack scripts, later phase
 - Shared: docs/CONTRACT.md only. The master copy lives here; platform repos pin a version. Change protocol is inside it.
-- Integrating a new platform means writing adapters on the platform side and a new profile here. It never means changing defence code.
+- Integrating a new platform means writing a new profile (with `[[collectors]]`). Platform-side adapters only when no collector fits. It never means changing defence code.
 
 ## Project Structure
 chain-of-custody/
@@ -40,6 +41,8 @@ chain-of-custody/
 ├── data/                    # runtime: sqlite files and keys (gitignored)
 ├── sidecar/                 # canon.py store.py ingest.py merkle.py keys.py checkpoint.py heartbeat.py main.py
 ├── witness/                 # app.py checks.py store.py
+├── coc/                     # CLI: cli.py init.py check.py profile.py (profile schema shared with the sidecar)
+├── collectors/              # generic collectors: json_lines, access_log, db_audit (step I3)
 ├── verifier/                # __main__.py checks.py
 ├── tools/                   # gen_events.py validate_spool.py
 └── tests/

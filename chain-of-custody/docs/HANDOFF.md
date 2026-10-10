@@ -6,13 +6,12 @@ Rule: a step is DONE only when its "Done when" check (DEFENCE_STEPS.md) AND its 
 Status key: [ ] todo, [~] in progress, [x] done, [!] red team broke it, needs fix
 
 ## Current state
-- Current step: D0-D10 built and reviewed; red-team gates await Jeev's ticks. D10 "Done when" (`docker compose up`) still needs one run on a machine with Docker. Next: "After D10" below
-- Last agent: Claude (moved all docs into docs/ and the red-team reports into docs/red-team/; no code changes, pytest 157 passed. Before that: red team + blue team on D8-D10, see docs/red-team/RED_TEAM_D8_D10.md)
+- Current step: D0-D10 built (red-team gates await Jeev's ticks; D10 compose still never run, Jeev is installing Docker). Now: I0 (waiting for Jaganath) and I1 (ready for Antigravity)
+- Last agent: Claude (I0 drafts on branch `contract-change-collectors`: CONTRACT v0.3, AGENTS.md ownership; I0-I4 written into DEFENCE_STEPS.md with gates below. Before that: moved docs into docs/)
 - Layout: README, AGENTS.md, CLAUDE.md stay at the root (agents load them there); .antigravity/tasks.md stays where Antigravity reads it
 - Last commit reviewed: 4c32d6b plus Antigravity's uncommitted D8-D10 work; D8-D10 and fixes in 29141c8 (pushed); pytest 157 passed (one unexplained single failure in 10 runs, did not repeat)
 - Open bugs: none known. Not yet verified: image build and compose up (no Docker on the review machine), Linux file ownership (RT-38)
-- Contract note (RT-24): hb_counter now increases by 1 per send attempt, so the witness can see gaps after failed sends. Witness rules unchanged; CONTRACT section 5 wording "increases by 1 per heartbeat" could be clarified via the change protocol
-- Contract note (RT-28): the verifier also turns the witness's own FORK alerts into FORK verdicts and SEQ_ROLLBACK alerts into TRUNCATION verdicts. Codes unchanged; CONTRACT section 6 could mention this via the change protocol
+- Contract notes RT-24 (hb_counter per send attempt) and RT-28 (verifier reports witness FORK / SEQ_ROLLBACK alerts): folded into the CONTRACT v0.3 draft
 - New CLI flags (deployment overrides, profile keys unchanged): verifier `--node-id`, sidecar `--witness-url`, witness `--nodes-file`
 - Window between heartbeats: newest interval_s + 2.5 s of events (32.5 s at default) can be removed or rewritten with no witness verdict
 - Interface assumptions about the platform: only CONTRACT.md v0.2. RawEvents arrive as JSONL in the spool file at `[paths] spool_path`; fields `source, ts, actor, event_type, details`; checked by `tools/validate_spool.py`.
@@ -131,33 +130,42 @@ Red-team gate
 - [ ] Check B: profile written, real spool feeds the sidecar, verifier clean, zero defence code changes
 - [ ] Check C: full red-team run with the teammate against the integrated system; every successful attack logged below with its fix
 
-## After D10 (agreed plan, start once D8-D10 are reviewed)
+## Integration-ready steps (I0 to I4, build details in DEFENCE_STEPS.md)
+Decisions (Jeev, 2026-10-10): collectors move into the defence (CONTRACT v0.3); Docker only, no pip; `coc` wrapper script runs the CLI in the image; new `coc/` package approved; witness runs on a second laptop.
 
-### A1: Test against the red team's attack repo
-- [ ] Get the red team repo (link or local path). Keep it separate; record the commit tested in the findings log
-- [ ] Agree one rule: every attack script takes its targets as arguments (sidecar DB path, spool path, witness URL) so it runs on a laptop, in Docker, or on the demo platform
-- [ ] Sort the attacks: should be detected now / outside the trust model (e.g. needs the witness host: document as a limitation, not a bug)
-- [ ] Test environment: D10 compose (sidecar + witness) fed by the demo platform or `tools.gen_events`
-- [ ] Per attack: run it, then `python -m verifier --witness URL` and the witness `/alerts`; expect the right code (EDIT, FORK, TRUNCATION, ...)
-- [ ] Every attack that gets through: findings log entry, fix, regression test in this repo
+## I0: Contract and ownership
+- [x] AGENTS.md updated, CONTRACT v0.3 drafted on `contract-change-collectors`
+- [ ] Jaganath approves v0.2 + v0.3 (then merge to main, he updates his pinned copy)
 
-### A2: "Download it and it works" packaging
-- [ ] Docker images published + `defence-compose.yml` (from D10)
-- [ ] One-command setup (`coc init`): creates keys, a profile, and the witness's trusted-key (nodes) file
-- [ ] Generic adapters configured in the profile (JSON log file, nginx access log, DB audit table). NEEDS JEEV'S OK FIRST: new modules, and changes the AGENTS.md split (adapters currently live on the platform side)
-- [ ] pip package with console commands (`coc-sidecar`, `coc-verify`, `coc-validate`), if wanted on top of Docker
-- [ ] Docs: the witness must run on a different machine from the platform
+## I1: `coc init` and `coc check`
+- [ ] Build
 
-### A3: Keep working on it after deployment
-- [ ] Merge to `main` once Jaganath approves CONTRACT v0.2 (incl. the hb_counter wording note); protect `main`
-- [ ] CI (GitHub Actions): pytest on Python 3.11+, image build, red-team attack suite on every PR
-- [ ] Releases versioned together with the CONTRACT version
+Red-team gate
+- [ ] Fresh clone: `coc init` then `coc check` pass with no manual edits
+- [ ] Broken profile (typo'd key, wrong type, missing key file, TOML syntax error): one clear error each, no stack trace
+- [ ] Witness laptop off: `coc check` fails in about 5 s with the network checklist, never hangs
+- [ ] `coc init` run twice changes nothing; `--force` is refused while the sidecar DB exists
+- [ ] After `coc check`, the DB, spool, offsets and keys are byte-identical and the witness has no new rows
+- [ ] The private key never appears in any output, log or error message
+- [ ] Witness refuses to start when `nodes_file` is missing or a folder
 
-### Open questions (answer before A1/A2 start)
-- [ ] Red team repo link / path?
-- [ ] Distribution: Docker only, or Docker + pip + `coc init`?
-- [ ] Build the generic adapters (structure change)?
-- [ ] Where does the witness run for the demo: second laptop or cloud VM?
+## I2: Split compose and publish images
+- [ ] Build (detail before starting)
+
+## I3: Collectors (waits for I0 approval)
+- [ ] Build (detail before starting)
+
+## I4: Attack harness against the hacker repo
+- [ ] Build (detail before starting; needs the hacker repo link)
+- [ ] Record the hacker repo commit tested; every attack that gets through goes in the findings log with a fix and a regression test
+
+### Open questions
+- [x] Distribution: Docker only (pip after the hackathon, if the project continues)
+- [x] Generic collectors in the defence: yes, via CONTRACT v0.3
+- [x] Witness for the demo: second laptop (same hotspot, firewall open on 8800, clocks synced)
+- [ ] Platform repo link (Jeev gives it once I1/I2 are in place)
+- [ ] Hacker repo link
+- [ ] Which database the platform uses (decides the next `db_audit` driver after sqlite)
 
 ## Later (out of scope for the base model, see AGENTS.md)
 - Per-entry MAC / key ratchet, external anchoring, forensics/evidence report, dashboard, innovation layer.
