@@ -8,7 +8,7 @@ Status key: [ ] todo, [~] in progress, [x] done, [!] red team broke it, needs fi
 ## Current state
 - Current step: D0-D10 built and reviewed; red-team gates await Jeev's ticks. D10 "Done when" (`docker compose up`) still needs one run on a machine with Docker. Next: "After D10" below
 - Last agent: Claude (red team + blue team on D8-D10, see RED_TEAM_D8_D10.md; earlier: RED_TEAM_D0_D4.md, RED_TEAM_D5_D7.md)
-- Last commit reviewed: 4c32d6b plus Antigravity's uncommitted D8-D10 work; D8-D10 and fixes uncommitted; pytest 157 passed (one unexplained single failure in 10 runs, did not repeat)
+- Last commit reviewed: 4c32d6b plus Antigravity's uncommitted D8-D10 work; D8-D10 and fixes in 29141c8 (pushed); pytest 157 passed (one unexplained single failure in 10 runs, did not repeat)
 - Open bugs: none known. Not yet verified: image build and compose up (no Docker on the review machine), Linux file ownership (RT-38)
 - Contract note (RT-24): hb_counter now increases by 1 per send attempt, so the witness can see gaps after failed sends. Witness rules unchanged; CONTRACT section 5 wording "increases by 1 per heartbeat" could be clarified via the change protocol
 - Contract note (RT-28): the verifier also turns the witness's own FORK alerts into FORK verdicts and SEQ_ROLLBACK alerts into TRUNCATION verdicts. Codes unchanged; CONTRACT section 6 could mention this via the change protocol
@@ -188,14 +188,14 @@ Red-team gate
 | D7 | RT-24 Reply lost / crash after send | WEAKENS: false COUNTER_REPLAY | 4960b95 |
 | D7 | RT-25 One DB error in heartbeat thread | WEAKENS: heartbeats stop for good | 4960b95 |
 | D7 | RT-26 Witness rejects checkpoints | WEAKENS: silent upload failure | 4960b95 |
-| D8 | RT-28 Stolen key: rewrite, re-sign, feed forged head to witness | BREAKS: verifier with witness says clean | fixed, uncommitted |
-| D8 | RT-29 Edit node_id in config to an unseen id | BREAKS: verifier with witness says clean | fixed, uncommitted |
-| D8 | RT-30 Verify while sidecar is live | WEAKENS: false TRUNCATION | fixed, uncommitted |
-| D10 | RT-31 compose up: spool mount path | BREAKS: nothing ingested, silently | fixed, uncommitted |
-| D10 | RT-32 compose up: witness nodes_file | BREAKS: witness cannot start | fixed, uncommitted |
-| D10 | RT-33 compose up: witness_url localhost | BREAKS: no heartbeats, SILENCE | fixed, uncommitted |
-| D10 | RT-34 No .dockerignore | WEAKENS: secrets sent to builder | fixed, uncommitted |
-| D0/D6 | RT-16 unpinned requirements, RT-27 no body limit (carried) | WEAKENS / NITPICK | fixed, uncommitted |
+| D8 | RT-28 Stolen key: rewrite, re-sign, feed forged head to witness | BREAKS: verifier with witness says clean | 29141c8 |
+| D8 | RT-29 Edit node_id in config to an unseen id | BREAKS: verifier with witness says clean | 29141c8 |
+| D8 | RT-30 Verify while sidecar is live | WEAKENS: false TRUNCATION | 29141c8 |
+| D10 | RT-31 compose up: spool mount path | BREAKS: nothing ingested, silently | 29141c8 |
+| D10 | RT-32 compose up: witness nodes_file | BREAKS: witness cannot start | 29141c8 |
+| D10 | RT-33 compose up: witness_url localhost | BREAKS: no heartbeats, SILENCE | 29141c8 |
+| D10 | RT-34 No .dockerignore | WEAKENS: secrets sent to builder | 29141c8 |
+| D0/D6 | RT-16 unpinned requirements, RT-27 no body limit (carried) | WEAKENS / NITPICK | 29141c8 |
 | D10 | RT-35 Witness on the same host in demo compose | WEAKENS: host admin can reach it | accepted for demo, documented |
 | D10 | RT-38 Root-owned data/ on Linux | WEAKENS: host verifier may not open DB | documented, untested |
 
