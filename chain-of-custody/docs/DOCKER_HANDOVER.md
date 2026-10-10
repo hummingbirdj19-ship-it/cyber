@@ -19,7 +19,6 @@ If it does not start:
 ```
 git clone https://github.com/JeevikaS-19/cybersec_hackathon.git
 cd cybersec_hackathon/chain-of-custody
-git checkout contract-change-collectors
 py -3.11 -m venv .venv
 .venv\Scripts\activate
 pip install -r requirements.txt

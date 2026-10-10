@@ -135,7 +135,8 @@ Decisions (Jeev, 2026-10-10): collectors move into the defence (CONTRACT v0.3); 
 
 ## I0: Contract and ownership
 - [x] AGENTS.md updated, CONTRACT v0.3 drafted on `contract-change-collectors`
-- [ ] Jaganath approves v0.2 + v0.3 (then merge to main, he updates his pinned copy)
+- [x] Merged to main (2026-10-10, Jeev's call: this repo is defence-only, so main does not wait for the platform)
+- [ ] Jaganath approves v0.2 + v0.3 and updates his pinned copy; then drop "DRAFT" from the CONTRACT title
 
 ## I1: `coc init` and `coc check`
 - [ ] Build
