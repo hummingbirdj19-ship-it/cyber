@@ -23,10 +23,14 @@ Open this folder as the workspace. Start a chat with:
 
 When stuck, paste: the step number, the exact error, and what you expected.
 
-## Quickstart (filled in as steps are finished)
-- Set up: `python -m venv .venv`, `pip install -r requirements.txt`, copy `config.example.toml` to `config.toml`
-- Run the defence locally: see DEFENCE_STEPS.md, Step 3 and Step 7
-- Plug in a platform: see INTEGRATION.md
+## Quickstart
+- **Set up**: `python -m venv .venv`, `pip install -r requirements.txt`, copy `config.example.toml` to `config.toml`
+- **Run witness service**: `python -m witness.app --config config.toml`
+- **Run sidecar ingest**: `python -m sidecar.main --config config.toml`
+- **Verify log integrity**: `python -m verifier --config config.toml [--witness http://localhost:8800 --node-id node-1]`
+- **Run with Docker**: `docker compose -f defence-compose.yml up -d`
+- **Run tampering self-test**: `python -m tests.test_tampering`
+- **Plug in a platform**: see [INTEGRATION.md](INTEGRATION.md)
 
 ## Known behaviour
 - After a legitimate full reset, the new chain looks like a fork to the witness. That is correct for the base model.

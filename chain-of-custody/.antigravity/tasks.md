@@ -15,9 +15,9 @@ Step details live in DEFENCE_STEPS.md. Integration details live in INTEGRATION.m
 - [x] D5 verifier v1 (offline checks)
 - [x] D6 witness service
 - [x] D7 heartbeat client and checkpoint upload
-- [ ] D8 verifier v2 (truncation, fork, silence)
-- [ ] D9 self-test tampering suite
-- [ ] D10 Docker packaging (standalone defence-compose.yml)
+- [x] D8 verifier v2 (truncation, fork, silence)
+- [x] D9 self-test tampering suite
+- [x] D10 Docker packaging (standalone defence-compose.yml)
 
 ## Integration checks (demo bank-style platform, separate repo)
 - [ ] Check A: real platform events pass `tools.validate_spool`

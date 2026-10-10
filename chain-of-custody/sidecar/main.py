@@ -21,7 +21,7 @@ logging.basicConfig(
 logger = logging.getLogger("sidecar")
 
 
-def run_sidecar(config_path: Path) -> int:
+def run_sidecar(config_path: Path, witness_url_override: str | None = None) -> int:
     """Initialize store and run sidecar ingestion using the given config file."""
     if not config_path.exists():
         logger.error("Configuration file not found: %s", config_path)
@@ -59,7 +59,7 @@ def run_sidecar(config_path: Path) -> int:
     signal.signal(signal.SIGTERM, handle_signal)
 
     hb_cfg = config.get("heartbeat", {})
-    witness_url = hb_cfg.get("witness_url")
+    witness_url = witness_url_override or hb_cfg.get("witness_url")
     hb_interval_s = float(hb_cfg.get("interval_s", 30))
     hb_thread = None
     if witness_url:
@@ -95,8 +95,10 @@ def main(argv: list[str] | None = None) -> int:
     """CLI entry point for sidecar."""
     parser = argparse.ArgumentParser(prog="python -m sidecar.main", description=__doc__)
     parser.add_argument("--config", type=Path, default=Path("config.toml"), help="profile configuration path")
+    parser.add_argument("--witness-url", default=None,
+                        help="override [heartbeat] witness_url (in Compose: http://witness:8800)")
     args = parser.parse_args(argv)
-    return run_sidecar(args.config)
+    return run_sidecar(args.config, args.witness_url)
 
 
 if __name__ == "__main__":

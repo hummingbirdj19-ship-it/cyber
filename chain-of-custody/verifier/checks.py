@@ -1,4 +1,4 @@
-"""Offline verifier checks for hash chain and Merkle checkpoint integrity."""
+"""Verifier checks: hash chain and Merkle checkpoints offline, plus comparison with the witness."""
 import json
 import sqlite3
 from pathlib import Path
@@ -110,27 +110,96 @@ def verify_checkpoints(conn: sqlite3.Connection, public_key_hex: str) -> list[di
     return [v for v in (_check_one_checkpoint(conn, public_key_hex, r) for r in rows) if v is not None]
 
 
-def verify_offline(db_path: Path, public_key_path: Path | None = None) -> dict[str, Any]:
-    """Execute all offline integrity checks against the database and return report dict."""
+def fetch_witness(node_id: str, witness_url: str, client: Any = None) -> dict[str, list[dict[str, Any]]]:
+    """Fetch a node's heartbeats, checkpoints and alerts from the witness; fail if it has none."""
+    import httpx
+    c = client if client is not None else httpx.Client(timeout=5.0)
+    try:
+        base, records = witness_url.rstrip("/"), {}
+        for ep in ("heartbeats", "checkpoints", "alerts"):
+            r = c.get(f"{base}/{ep}", params={"node_id": node_id, "limit": 100000})
+            if r.status_code != 200:
+                raise RuntimeError(f"witness GET /{ep} returned HTTP {r.status_code}")
+            records[ep] = r.json()
+    finally:
+        if client is None:
+            c.close()
+    if not records["heartbeats"] and not records["checkpoints"]:
+        # Fail closed: an empty history (wrong or edited node_id) must never read as "nothing to compare".
+        raise RuntimeError(f"witness has no heartbeats or checkpoints for node_id '{node_id}'; "
+                           "check the node id (use --node-id) and that the sidecar has reached the witness")
+    return records
+
+
+def verify_witness(conn: sqlite3.Connection, records: dict[str, list[dict[str, Any]]]) -> list[dict[str, Any]]:
+    """Compare the local log with fetched witness records: TRUNCATION, FORK and SILENCE verdicts."""
+    verdicts: list[dict[str, Any]] = []
+    val = conn.execute("SELECT MAX(seq) FROM entries").fetchone()[0]
+    local_head = -1 if val is None else int(val)
+
+    # Keep every hash per seq: with a stolen key an attacker can add a second history, never remove the first.
+    w_heads: dict[int, set[str]] = {}
+    for x in records["heartbeats"] + records["checkpoints"]:
+        w_heads.setdefault(int(x["head_seq"]), set()).add(str(x["head_hash"]))
+    max_w_seq = max(w_heads, default=-1)
+    if local_head < max_w_seq:
+        verdicts.append(_verdict("TRUNCATION", local_head + 1, max_w_seq,
+                                 f"local head {local_head} is lower than witness head {max_w_seq}"))
+
+    for w_seq, w_hashes in sorted(w_heads.items()):
+        if w_seq < 0:
+            continue
+        if len(w_hashes) > 1:
+            verdicts.append(_verdict("FORK", w_seq, w_seq,
+                                     f"witness holds {len(w_hashes)} different head_hash values for seq {w_seq}"))
+            continue
+        row = conn.execute("SELECT hash FROM entries WHERE seq = ?", (w_seq,)).fetchone() if w_seq <= local_head else None
+        if row is not None and str(row["hash"]) not in w_hashes:
+            verdicts.append(_verdict("FORK", w_seq, w_seq,
+                                     f"local hash at seq {w_seq} ({row['hash']}) differs from witness ({min(w_hashes)})"))
+
+    # The witness's own alerts are records of the node claiming another history, or going quiet.
+    alert_codes = {"FORK": "FORK", "SEQ_ROLLBACK": "TRUNCATION", "SILENCE": "SILENCE"}
+    for a in records["alerts"]:
+        code = alert_codes.get(a.get("code"))
+        if code:
+            at = max(0, local_head)
+            verdicts.append(_verdict(code, at, at, f"witness {a.get('code')} alert at {a.get('received_at')}: "
+                                                   f"{a.get('detail')}"))
+    return verdicts
+
+
+def verify(
+    db_path: Path, public_key_path: Path | None = None, witness_url: str | None = None,
+    node_id: str | None = None, client: Any = None,
+) -> dict[str, Any]:
+    """Execute offline and optional witness checks against the database and return report."""
     if not db_path.exists():
         raise FileNotFoundError(f"Database file does not exist: {db_path}")
     if public_key_path is not None and not public_key_path.exists():
         # Fail closed: without the key the checkpoints cannot be checked, so "clean" would be a lie.
         raise FileNotFoundError(f"Public key file does not exist: {public_key_path}; cannot verify checkpoints")
+    if witness_url and not node_id:
+        raise ValueError("--witness needs a node id ([node] node_id in the config, or --node-id)")
+    # Witness first: the sidecar commits an entry before any heartbeat reports it, so the local
+    # snapshot taken afterwards already holds everything the witness saw (no false TRUNCATION).
+    records = fetch_witness(node_id, witness_url, client=client) if witness_url else None
 
     conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, isolation_level=None)
     conn.row_factory = sqlite3.Row
     try:
-        conn.execute("BEGIN")  # one read snapshot for entries and checkpoints
+        conn.execute("BEGIN")  # one read snapshot for entries, checkpoints and the witness comparison
         checked_entries, verdicts = verify_entries(conn)
         if public_key_path is not None:
-            pub_hex = public_key_path.read_text(encoding="utf-8").strip()
-            verdicts.extend(verify_checkpoints(conn, pub_hex))
+            verdicts.extend(verify_checkpoints(conn, public_key_path.read_text(encoding="utf-8").strip()))
+        if records is not None:
+            verdicts.extend(verify_witness(conn, records))
     finally:
         conn.close()
 
-    return {
-        "clean": len(verdicts) == 0,
-        "checked_entries": checked_entries,
-        "verdicts": verdicts,
-    }
+    return {"clean": len(verdicts) == 0, "checked_entries": checked_entries, "verdicts": verdicts}
+
+
+def verify_offline(db_path: Path, public_key_path: Path | None = None) -> dict[str, Any]:
+    """Execute all offline integrity checks against the database and return report dict."""
+    return verify(db_path, public_key_path)

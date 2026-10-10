@@ -5,7 +5,7 @@ import sys
 import tomllib
 from pathlib import Path
 
-from verifier.checks import verify_offline
+from verifier.checks import verify
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -13,11 +13,9 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m verifier", description="Verify log integrity.")
     parser.add_argument("--config", type=Path, default=Path("config.toml"), help="path to profile config file")
     parser.add_argument("--witness", type=str, default=None, help="witness service URL (for online checks)")
+    parser.add_argument("--node-id", type=str, default=None,
+                        help="node id to look up at the witness (default: [node] node_id from the config)")
     args = parser.parse_args(argv)
-    if args.witness:
-        # Fail closed until D8: never print "clean" for checks that did not run.
-        print("error: --witness checks (TRUNCATION, FORK, SILENCE) are not implemented yet (D8)", file=sys.stderr)
-        return 2
 
     try:
         if not args.config.exists():
@@ -29,8 +27,10 @@ def main(argv: list[str] | None = None) -> int:
 
         db_path = Path(config["paths"]["db_path"])
         pub_path = Path(config["paths"]["public_key_path"])
+        # An auditor should pass --node-id: the config sits on the host being audited.
+        node_id = args.node_id or config.get("node", {}).get("node_id")
 
-        result = verify_offline(db_path, pub_path)
+        result = verify(db_path, pub_path, witness_url=args.witness, node_id=node_id)
     except Exception as exc:
         print(f"error: verification failed: {exc}", file=sys.stderr)
         return 2

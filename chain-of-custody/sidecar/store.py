@@ -42,9 +42,8 @@ def get_connection(db_path: Path | str) -> sqlite3.Connection:
     if isinstance(db_path, (str, Path)) and str(db_path) != ":memory:":
         Path(db_path).parent.mkdir(parents=True, exist_ok=True)
     # isolation_level=None: no implicit transactions, works on Python 3.11 (autocommit= needs 3.12).
-    conn = sqlite3.connect(str(db_path), isolation_level=None, check_same_thread=False)
+    conn = sqlite3.connect(str(db_path), timeout=10.0, isolation_level=None, check_same_thread=False)
     conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL;")
     conn.execute("PRAGMA synchronous=NORMAL;")
     return conn
 
@@ -52,6 +51,7 @@ def get_connection(db_path: Path | str) -> sqlite3.Connection:
 def init_db(db_path: Path | str) -> sqlite3.Connection:
     """Initialize the SQLite database schema and return the connection."""
     conn = get_connection(db_path)
+    conn.execute("PRAGMA journal_mode=WAL;")
     conn.executescript(SCHEMA)
     return conn
 

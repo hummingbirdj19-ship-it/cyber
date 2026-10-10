@@ -6,13 +6,14 @@ Rule: a step is DONE only when its "Done when" check (DEFENCE_STEPS.md) AND its 
 Status key: [ ] todo, [~] in progress, [x] done, [!] red team broke it, needs fix
 
 ## Current state
-- Current step: D0-D7 reviewed and fixed; red-team gates await Jeev's ticks. Next: D8 (Antigravity)
-- Last agent: Claude (red team + blue team on D5-D7, see RED_TEAM_D5_D7.md; D0-D4 in RED_TEAM_D0_D4.md)
-- Last commit reviewed: none (D0-D7 code and fixes are uncommitted); pytest 136 passed
-- Open bugs: none. Deferred to D10: RT-16 (pin requirements), RT-27 (witness request body limit)
+- Current step: D0-D10 built and reviewed; red-team gates await Jeev's ticks. D10 "Done when" (`docker compose up`) still needs one run on a machine with Docker. Next: "After D10" below
+- Last agent: Claude (red team + blue team on D8-D10, see RED_TEAM_D8_D10.md; earlier: RED_TEAM_D0_D4.md, RED_TEAM_D5_D7.md)
+- Last commit reviewed: 4c32d6b plus Antigravity's uncommitted D8-D10 work; D8-D10 and fixes uncommitted; pytest 157 passed (one unexplained single failure in 10 runs, did not repeat)
+- Open bugs: none known. Not yet verified: image build and compose up (no Docker on the review machine), Linux file ownership (RT-38)
 - Contract note (RT-24): hb_counter now increases by 1 per send attempt, so the witness can see gaps after failed sends. Witness rules unchanged; CONTRACT section 5 wording "increases by 1 per heartbeat" could be clarified via the change protocol
-- Carry into D8: replace the `--witness` stub (exits 2 now); verify local checkpoints against the witness's copy or pinned key (defeats a swapped node1.pub); window between heartbeats is about interval_s (30 s) + 2.5 s send timeout
-- Carry into D10: confirm Python 3.11 in the image; body-size limit in front of the witness
+- Contract note (RT-28): the verifier also turns the witness's own FORK alerts into FORK verdicts and SEQ_ROLLBACK alerts into TRUNCATION verdicts. Codes unchanged; CONTRACT section 6 could mention this via the change protocol
+- New CLI flags (deployment overrides, profile keys unchanged): verifier `--node-id`, sidecar `--witness-url`, witness `--nodes-file`
+- Window between heartbeats: newest interval_s + 2.5 s of events (32.5 s at default) can be removed or rewritten with no witness verdict
 - Interface assumptions about the platform: only CONTRACT.md v0.2. RawEvents arrive as JSONL in the spool file at `[paths] spool_path`; fields `source, ts, actor, event_type, details`; checked by `tools/validate_spool.py`.
 
 ## Trust model (what the red team may assume)
@@ -102,7 +103,7 @@ Red-team gate
 - [ ] Shared SQLite connection between ingest and heartbeat threads: safe?
 
 ## D8: Verifier v2 (with witness)
-- [ ] Build
+- [x] Build (RT-28 to RT-30, RT-36 fixed)
 
 Red-team gate
 - [ ] Delete the last N entries -> TRUNCATION
@@ -111,13 +112,13 @@ Red-team gate
 - [ ] Window between heartbeats: how much can be tampered undetected? Write the number down
 
 ## D9: Self-test tampering suite
-- [ ] Build
+- [x] Build (RT-37 nitpick fixed)
 
 Red-team gate
 - [ ] Break the verifier on purpose once: the suite goes red
 
 ## D10: Docker packaging
-- [ ] Build
+- [~] Build (RT-31 to RT-34, RT-16, RT-27 fixed; images not built yet, no Docker on the review machine)
 
 Red-team gate
 - [ ] Spool mounted read-only in the sidecar container
@@ -166,26 +167,36 @@ Red-team gate
 ## Red-team findings log
 | Step | Attack | Result | Fix commit |
 |------|--------|--------|------------|
-| D0 | RT-01 Run on Python 3.11 | BREAKS: `autocommit=` needs 3.12 | fixed, uncommitted |
-| D1 | RT-02 Lone surrogate (`\ud800` escape) | BREAKS: passed validator, dropped at ingest | fixed, uncommitted |
-| D1 | RT-03 Deeply nested JSON line | BREAKS: validator crash, ingest stalls forever | fixed, uncommitted |
-| D1 | RT-04 Duplicate JSON key | WEAKENS: accepted, last wins | fixed, uncommitted |
-| D3 | RT-05 Crash between append and offset save | BREAKS: duplicate entry on restart | fixed, uncommitted |
-| D3 | RT-06 Append fails (disk full) | BREAKS: event lost | fixed, uncommitted |
-| D3 | RT-07 Replace spool with a longer file | BREAKS: forged lines ingested from old offset | fixed, uncommitted |
-| D3 | RT-08 Second sidecar on same DB | WEAKENS: duplicates | fixed, uncommitted |
-| D4 | RT-10 Run sidecar, wait for checkpoints | BREAKS: none ever created | fixed, uncommitted |
-| D4 | RT-11 Delete middle row, then checkpoint | WEAKENS: signs inconsistent tree | fixed, uncommitted |
-| D4 | RT-12 Delete .pub or .key | WEAKENS: private key replaced, identity rotated | fixed, uncommitted |
-| D4 | RT-13 Non-string signature | WEAKENS: verify crashes | fixed, uncommitted |
-| D5 | RT-17 Forged entry with seq -1 | BREAKS: verifier says clean | fixed, uncommitted |
-| D5 | RT-18 Invalid JSON in one row's details | WEAKENS: verifier crash hides all verdicts | fixed, uncommitted |
-| D5 | RT-19 Re-chain, then delete node1.pub | BREAKS: checkpoint checks skipped, clean | fixed, uncommitted |
-| D5 | RT-20 Truncate below a signed local checkpoint | WEAKENS: clean | fixed, uncommitted |
-| D5 | RT-21 Run with --witness | WEAKENS: flag ignored, "clean" | fixed (stub until D8), uncommitted |
-| D6 | RT-23 Junk heartbeats with random node_ids | WEAKENS: unbounded alert rows | fixed, uncommitted |
-| D7 | RT-24 Reply lost / crash after send | WEAKENS: false COUNTER_REPLAY | fixed, uncommitted |
-| D7 | RT-25 One DB error in heartbeat thread | WEAKENS: heartbeats stop for good | fixed, uncommitted |
-| D7 | RT-26 Witness rejects checkpoints | WEAKENS: silent upload failure | fixed, uncommitted |
+| D0 | RT-01 Run on Python 3.11 | BREAKS: `autocommit=` needs 3.12 | 4960b95 |
+| D1 | RT-02 Lone surrogate (`\ud800` escape) | BREAKS: passed validator, dropped at ingest | 4960b95 |
+| D1 | RT-03 Deeply nested JSON line | BREAKS: validator crash, ingest stalls forever | 4960b95 |
+| D1 | RT-04 Duplicate JSON key | WEAKENS: accepted, last wins | 4960b95 |
+| D3 | RT-05 Crash between append and offset save | BREAKS: duplicate entry on restart | 4960b95 |
+| D3 | RT-06 Append fails (disk full) | BREAKS: event lost | 4960b95 |
+| D3 | RT-07 Replace spool with a longer file | BREAKS: forged lines ingested from old offset | 4960b95 |
+| D3 | RT-08 Second sidecar on same DB | WEAKENS: duplicates | 4960b95 |
+| D4 | RT-10 Run sidecar, wait for checkpoints | BREAKS: none ever created | 4960b95 |
+| D4 | RT-11 Delete middle row, then checkpoint | WEAKENS: signs inconsistent tree | 4960b95 |
+| D4 | RT-12 Delete .pub or .key | WEAKENS: private key replaced, identity rotated | 4960b95 |
+| D4 | RT-13 Non-string signature | WEAKENS: verify crashes | 4960b95 |
+| D5 | RT-17 Forged entry with seq -1 | BREAKS: verifier says clean | 4960b95 |
+| D5 | RT-18 Invalid JSON in one row's details | WEAKENS: verifier crash hides all verdicts | 4960b95 |
+| D5 | RT-19 Re-chain, then delete node1.pub | BREAKS: checkpoint checks skipped, clean | 4960b95 |
+| D5 | RT-20 Truncate below a signed local checkpoint | WEAKENS: clean | 4960b95 |
+| D5 | RT-21 Run with --witness | WEAKENS: flag ignored, "clean" | 4960b95 (stub until D8) |
+| D6 | RT-23 Junk heartbeats with random node_ids | WEAKENS: unbounded alert rows | 4960b95 |
+| D7 | RT-24 Reply lost / crash after send | WEAKENS: false COUNTER_REPLAY | 4960b95 |
+| D7 | RT-25 One DB error in heartbeat thread | WEAKENS: heartbeats stop for good | 4960b95 |
+| D7 | RT-26 Witness rejects checkpoints | WEAKENS: silent upload failure | 4960b95 |
+| D8 | RT-28 Stolen key: rewrite, re-sign, feed forged head to witness | BREAKS: verifier with witness says clean | fixed, uncommitted |
+| D8 | RT-29 Edit node_id in config to an unseen id | BREAKS: verifier with witness says clean | fixed, uncommitted |
+| D8 | RT-30 Verify while sidecar is live | WEAKENS: false TRUNCATION | fixed, uncommitted |
+| D10 | RT-31 compose up: spool mount path | BREAKS: nothing ingested, silently | fixed, uncommitted |
+| D10 | RT-32 compose up: witness nodes_file | BREAKS: witness cannot start | fixed, uncommitted |
+| D10 | RT-33 compose up: witness_url localhost | BREAKS: no heartbeats, SILENCE | fixed, uncommitted |
+| D10 | RT-34 No .dockerignore | WEAKENS: secrets sent to builder | fixed, uncommitted |
+| D0/D6 | RT-16 unpinned requirements, RT-27 no body limit (carried) | WEAKENS / NITPICK | fixed, uncommitted |
+| D10 | RT-35 Witness on the same host in demo compose | WEAKENS: host admin can reach it | accepted for demo, documented |
+| D10 | RT-38 Root-owned data/ on Linux | WEAKENS: host verifier may not open DB | documented, untested |
 
-Full detail (why it broke, plan, verification): RED_TEAM_D0_D4.md (RT-01 to RT-16, including nitpicks RT-09, RT-14 to RT-16) and RED_TEAM_D5_D7.md (RT-17 to RT-27, including nitpicks RT-22, RT-27)
+Full detail (why it broke, plan, verification): RED_TEAM_D0_D4.md (RT-01 to RT-16, including nitpicks RT-09, RT-14 to RT-16) RED_TEAM_D5_D7.md (RT-17 to RT-27, including nitpicks RT-22, RT-27) and RED_TEAM_D8_D10.md (RT-28 to RT-38, plus RT-16 and RT-27 closed)

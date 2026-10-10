@@ -14,12 +14,43 @@ from typing import Any
 
 from fastapi import Body, FastAPI, Query
 from fastapi.responses import JSONResponse
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from witness import checks, store
 
 logger = logging.getLogger("witness")
 ALERT_THROTTLE_S = 10
 SWEEP_EVERY_S = 5.0
+MAX_BODY_BYTES = 16 * 1024  # real heartbeats and checkpoints are under 1 KiB
+
+
+class BodyLimit:
+    """ASGI middleware: 413 for a declared body over MAX_BODY_BYTES; stop reading a longer chunked one."""
+
+    def __init__(self, app: ASGIApp) -> None:
+        """Wrap the inner ASGI app."""
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        """Check Content-Length up front, then count the bytes actually received."""
+        if scope["type"] != "http":
+            return await self.app(scope, receive, send)
+        length = dict(scope["headers"]).get(b"content-length", b"0")
+        if not length.isdigit() or int(length) > MAX_BODY_BYTES:
+            too_large = JSONResponse({"status": "invalid", "errors": ["body too large"]}, status_code=413)
+            return await too_large(scope, receive, send)
+        seen = 0
+
+        async def limited() -> Message:
+            """Pass body chunks through, stopping once the total is too large."""
+            nonlocal seen
+            msg = await receive()
+            seen += len(msg.get("body", b""))
+            if seen > MAX_BODY_BYTES:
+                raise ValueError("request body too large")  # FastAPI turns this into a 400
+            return msg
+
+        await self.app(scope, limited, send)
 
 
 def iso_utc(epoch: float) -> str:
@@ -27,12 +58,14 @@ def iso_utc(epoch: float) -> str:
     return datetime.fromtimestamp(epoch, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def create_app(config_path: Path, now: Callable[[], float] = time.time) -> FastAPI:
-    """Build the witness app from a profile; `now` is the witness clock (injectable for tests)."""
+def create_app(
+    config_path: Path, now: Callable[[], float] = time.time, nodes_file: Path | None = None
+) -> FastAPI:
+    """Build the witness app from a profile; `now` is the witness clock, `nodes_file` overrides the profile."""
     with open(config_path, "rb") as f:
         config = tomllib.load(f)
     interval_s = float(config["heartbeat"]["interval_s"])
-    nodes = checks.load_nodes(Path(config["witness"]["nodes_file"]))
+    nodes = checks.load_nodes(nodes_file or Path(config["witness"]["nodes_file"]))
     conn = store.connect(config["witness"]["db_path"])
     lock = threading.Lock()
     started_at = now()
@@ -75,6 +108,7 @@ def create_app(config_path: Path, now: Callable[[], float] = time.time) -> FastA
             task.cancel()
 
     app = FastAPI(title="Chain of Custody witness", lifespan=lifespan)
+    app.add_middleware(BodyLimit)
     app.state.conn, app.state.sweep_silence = conn, sweep_silence
 
     @app.post("/heartbeat")
@@ -143,10 +177,11 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m witness.app", description=__doc__)
     parser.add_argument("--config", type=Path, default=Path("config.toml"), help="profile configuration path")
     parser.add_argument("--host", default="127.0.0.1", help="bind address (use 0.0.0.0 in a container)")
+    parser.add_argument("--nodes-file", type=Path, default=None, help="override [witness] nodes_file")
     args = parser.parse_args(argv)
     with open(args.config, "rb") as f:
         port = int(tomllib.load(f)["witness"]["port"])
-    uvicorn.run(create_app(args.config), host=args.host, port=port)
+    uvicorn.run(create_app(args.config, nodes_file=args.nodes_file), host=args.host, port=port)
     return 0
 
 
