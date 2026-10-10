@@ -6,7 +6,7 @@ Rule: a step is DONE only when its "Done when" check (DEFENCE_STEPS.md) AND its 
 Status key: [ ] todo, [~] in progress, [x] done, [!] red team broke it, needs fix
 
 ## Current state
-- Current step: D0-D10 built (red-team gates await Jeev's ticks; D10 compose still never run, Jeev is installing Docker). Now: I0 (waiting for Jaganath) and I1 (ready for Antigravity)
+- Current step: D0-D10 built (red-team gates await Jeev's ticks; D10 compose still never run; handed to a teammate via docs/DOCKER_HANDOVER.md). Now: I0 (waiting for Jaganath) and I1 (ready for Antigravity)
 - Last agent: Claude (I0 drafts on branch `contract-change-collectors`: CONTRACT v0.3, AGENTS.md ownership; I0-I4 written into DEFENCE_STEPS.md with gates below. Before that: moved docs into docs/)
 - Layout: README, AGENTS.md, CLAUDE.md stay at the root (agents load them there); .antigravity/tasks.md stays where Antigravity reads it
 - Last commit reviewed: 4c32d6b plus Antigravity's uncommitted D8-D10 work; D8-D10 and fixes in 29141c8 (pushed); pytest 157 passed (one unexplained single failure in 10 runs, did not repeat)
