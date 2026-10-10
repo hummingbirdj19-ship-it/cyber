@@ -129,6 +129,34 @@ Red-team gate
 - [ ] Check B: profile written, real spool feeds the sidecar, verifier clean, zero defence code changes
 - [ ] Check C: full red-team run with the teammate against the integrated system; every successful attack logged below with its fix
 
+## After D10 (agreed plan, start once D8-D10 are reviewed)
+
+### A1: Test against the red team's attack repo
+- [ ] Get the red team repo (link or local path). Keep it separate; record the commit tested in the findings log
+- [ ] Agree one rule: every attack script takes its targets as arguments (sidecar DB path, spool path, witness URL) so it runs on a laptop, in Docker, or on the demo platform
+- [ ] Sort the attacks: should be detected now / outside the trust model (e.g. needs the witness host: document as a limitation, not a bug)
+- [ ] Test environment: D10 compose (sidecar + witness) fed by the demo platform or `tools.gen_events`
+- [ ] Per attack: run it, then `python -m verifier --witness URL` and the witness `/alerts`; expect the right code (EDIT, FORK, TRUNCATION, ...)
+- [ ] Every attack that gets through: findings log entry, fix, regression test in this repo
+
+### A2: "Download it and it works" packaging
+- [ ] Docker images published + `defence-compose.yml` (from D10)
+- [ ] One-command setup (`coc init`): creates keys, a profile, and the witness's trusted-key (nodes) file
+- [ ] Generic adapters configured in the profile (JSON log file, nginx access log, DB audit table). NEEDS JEEV'S OK FIRST: new modules, and changes the AGENTS.md split (adapters currently live on the platform side)
+- [ ] pip package with console commands (`coc-sidecar`, `coc-verify`, `coc-validate`), if wanted on top of Docker
+- [ ] Docs: the witness must run on a different machine from the platform
+
+### A3: Keep working on it after deployment
+- [ ] Merge to `main` once Jaganath approves CONTRACT v0.2 (incl. the hb_counter wording note); protect `main`
+- [ ] CI (GitHub Actions): pytest on Python 3.11+, image build, red-team attack suite on every PR
+- [ ] Releases versioned together with the CONTRACT version
+
+### Open questions (answer before A1/A2 start)
+- [ ] Red team repo link / path?
+- [ ] Distribution: Docker only, or Docker + pip + `coc init`?
+- [ ] Build the generic adapters (structure change)?
+- [ ] Where does the witness run for the demo: second laptop or cloud VM?
+
 ## Later (out of scope for the base model, see AGENTS.md)
 - Per-entry MAC / key ratchet, external anchoring, forensics/evidence report, dashboard, innovation layer.
 - Red-team questions to answer when these start: does it add attack surface? Can the attacker write to the anchor store? Does the report itself prove integrity?
