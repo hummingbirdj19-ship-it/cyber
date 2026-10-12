@@ -27,13 +27,17 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     if args.command == "init":
-        return run_init(
-            node_id=args.node_id,
-            spool_path=args.spool,
-            witness_url=args.witness_url,
-            force=args.force,
-            config_path=args.config,
-        )
+        try:
+            return run_init(
+                node_id=args.node_id,
+                spool_path=args.spool,
+                witness_url=args.witness_url,
+                force=args.force,
+                config_path=args.config,
+            )
+        except Exception as exc:  # exit 2 = the tool itself failed, same meaning as the verifier
+            sys.stderr.write(f"Crash: {type(exc).__name__}: {exc}\n")
+            return 2
     elif args.command == "check":
         return run_check(config_path=args.config)
 

@@ -1,0 +1,6 @@
+# Safety net: the project's own ignores are in chain-of-custody/.gitignore.
+# Never commit keys or runtime state that a tool or test wrote at the repo root.
+*.key
+data/
+config.toml
+spool/*.jsonl

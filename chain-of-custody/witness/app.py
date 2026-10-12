@@ -65,15 +65,7 @@ def create_app(
     with open(config_path, "rb") as f:
         config = tomllib.load(f)
     interval_s = float(config["heartbeat"]["interval_s"])
-    nodes_path = nodes_file or Path(config["witness"]["nodes_file"])
-    if not nodes_path.exists():
-        raise FileNotFoundError(f"nodes_file '{nodes_path}' is missing")
-    if nodes_path.is_dir():
-        raise ValueError(
-            f"nodes_file '{nodes_path}' is a directory, not a file "
-            "(Docker creates a folder when the file is missing on the host)"
-        )
-    nodes = checks.load_nodes(nodes_path)
+    nodes = checks.load_nodes(nodes_file or Path(config["witness"]["nodes_file"]))  # refuses missing or folder
     conn = store.connect(config["witness"]["db_path"])
     lock = threading.Lock()
     started_at = now()
@@ -189,20 +181,13 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     with open(args.config, "rb") as f:
         config = tomllib.load(f)
-    nodes_path = args.nodes_file or Path(config["witness"]["nodes_file"])
-    if not nodes_path.exists():
-        logger.error("nodes_file '%s' is missing", nodes_path)
-        sys.stderr.write(f"Error: nodes_file '{nodes_path}' is missing\n")
+    try:
+        app = create_app(args.config, nodes_file=args.nodes_file)
+    except (FileNotFoundError, ValueError) as exc:  # missing, folder or malformed nodes_file
+        logger.error("%s", exc)
+        sys.stderr.write(f"Error: {exc}\n")
         return 2
-    if nodes_path.is_dir():
-        logger.error("nodes_file '%s' is a directory, not a file", nodes_path)
-        sys.stderr.write(
-            f"Error: nodes_file '{nodes_path}' is a directory, not a file "
-            "(Docker creates a folder when the file is missing on the host)\n"
-        )
-        return 2
-    port = int(config["witness"]["port"])
-    uvicorn.run(create_app(args.config, nodes_file=nodes_path), host=args.host, port=port)
+    uvicorn.run(app, host=args.host, port=int(config["witness"]["port"]))
     return 0
 
 

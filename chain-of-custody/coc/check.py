@@ -4,6 +4,7 @@ from pathlib import Path
 import sqlite3
 import sys
 from typing import Any
+from urllib.parse import urlsplit, urlunsplit
 
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
@@ -12,6 +13,21 @@ import httpx
 from coc.profile import load_profile
 from sidecar.keys import public_key_hex
 from tools.validate_spool import validate_file
+
+
+CONTAINER_MARKER = Path("/.dockerenv")
+LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1"}
+
+
+def _witness_target(witness_url: str) -> tuple[str, str | None]:
+    """Inside a container, point localhost at the host machine; return (url, note to print)."""
+    parts = urlsplit(witness_url)
+    if not CONTAINER_MARKER.exists() or parts.hostname not in LOCAL_HOSTS:
+        return witness_url, None
+    netloc = "host.docker.internal" + (f":{parts.port}" if parts.port else "")
+    url = urlunsplit(parts._replace(netloc=netloc))
+    return url, (f"NOTE  witness: running in a container, where {parts.hostname} is the container itself; "
+                 f"checking the host at {url} instead")
 
 
 def _check_sqlite_ro(db_path: Path) -> str | None:
@@ -141,7 +157,9 @@ def run_check(
         # Layer 4: Witness
         # -------------------------------------------------------------
         node_id = profile["node"]["node_id"]
-        witness_url = profile["heartbeat"]["witness_url"].rstrip("/")
+        witness_url, note = _witness_target(profile["heartbeat"]["witness_url"].rstrip("/"))
+        if note:
+            print(note)
         hb_url = f"{witness_url}/heartbeats"
 
         try:
@@ -150,19 +168,6 @@ def run_check(
             else:
                 with httpx.Client(timeout=timeout) as cl:
                     resp = cl.get(hb_url, params={"node_id": node_id})
-
-            if resp.status_code == 200:
-                data = resp.json()
-                if not data:
-                    print(
-                        f"WARN  witness: reachable at {witness_url}, but no heartbeats yet for node '{node_id}'\n"
-                        "      Reminder: the node's key must be in the witness's witness_nodes.toml"
-                    )
-                else:
-                    print(f"PASS  witness: reachable at {witness_url} ({len(data)} heartbeat(s) recorded for '{node_id}')")
-            else:
-                print(f"FAIL  witness: returned HTTP {resp.status_code}: {resp.text}")
-                return 1
         except Exception as exc:
             print(f"FAIL  witness: unreachable at {witness_url} ({type(exc).__name__}: {exc})")
             print("      Network checklist:")
@@ -171,6 +176,22 @@ def run_check(
             print("      - Both laptops are connected to the same network or hotspot")
             print("      - The witness service is running")
             return 1
+
+        try:
+            data = resp.json() if resp.status_code == 200 else None
+        except ValueError:
+            data = None
+        if not isinstance(data, list):
+            print(f"FAIL  witness: {witness_url} answered HTTP {resp.status_code}, but not like a witness "
+                  "(wrong host or port?)")
+            return 1
+        if not data:
+            print(
+                f"WARN  witness: reachable at {witness_url}, but no heartbeats yet for node '{node_id}'\n"
+                "      Reminder: the node's key must be in the witness's witness_nodes.toml"
+            )
+        else:
+            print(f"PASS  witness: reachable at {witness_url} ({len(data)} heartbeat(s) recorded for '{node_id}')")
 
         # -------------------------------------------------------------
         # Layer 5: Collectors

@@ -140,11 +140,11 @@ nodes_file = "data/witness_nodes.toml"
     assert "TOML syntax error" in out_syntax
 
 
-def test_unreachable_witness_fails_quickly_with_checklist(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+def test_unreachable_witness_fails_quickly_with_checklist(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
     """With the witness laptop off or unreachable, coc check fails within about 5 s with the network checklist."""
-    # Create valid keys and config pointing to unreachable port
-    priv_file = tmp_path / "node1.key"
-    pub_file = tmp_path / "node1.pub"
+    monkeypatch.chdir(tmp_path)  # the profile's key paths are relative; never write keys into the repo
     run_init(
         config_path=tmp_path / "config.toml",
         example_config_path=tmp_path / "config.example.toml",
@@ -294,3 +294,153 @@ def test_coc_cli_dispatch(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> No
     res_check = cli_main(["check", "--config", "config.toml"])
     # Fails at witness check layer since no witness is running
     assert res_check in (0, 1)
+
+
+# ---------------------------------------------------------------------------
+# Red-team regressions for I1 (RT-39 to RT-45, RT-47; see docs/HANDOFF.md)
+# ---------------------------------------------------------------------------
+REPO = Path(__file__).resolve().parents[1]
+
+
+def _init_ok(**kwargs: object) -> None:
+    """Run coc init in the current folder and require success."""
+    assert run_init(config_path=Path("config.toml"), **kwargs) == 0  # type: ignore[arg-type]
+
+
+def test_rt39_rt47_wrappers_use_image_code_and_host_access() -> None:
+    """The wrappers import coc from the image, reach the host, and (coc.sh) keep file ownership."""
+    assert "PYTHONPATH=/app" in (REPO / "sidecar" / "Dockerfile").read_text(encoding="utf-8")
+    ps1 = (REPO / "coc.ps1").read_text(encoding="utf-8")
+    sh = (REPO / "coc.sh").read_text(encoding="utf-8")
+    for script in (ps1, sh):
+        assert "python -P -m coc" in script
+        assert "host.docker.internal:host-gateway" in script
+    assert '--user "$(id -u):$(id -g)"' in sh
+
+
+def test_rt41_no_wrapper_copies_outside_the_project() -> None:
+    """Wrappers live next to defence-compose.yml only; a root copy writes keys outside .gitignore."""
+    assert not (REPO.parent / "coc.ps1").exists()
+    assert not (REPO.parent / "coc.sh").exists()
+
+
+def test_rt40_localhost_means_the_host_inside_a_container(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """In a container, localhost witness URLs are checked at host.docker.internal; elsewhere unchanged."""
+    from coc import check as check_mod
+
+    monkeypatch.setattr(check_mod, "CONTAINER_MARKER", tmp_path / "absent")
+    assert check_mod._witness_target("http://localhost:8800") == ("http://localhost:8800", None)
+    marker = tmp_path / ".dockerenv"
+    marker.write_text("", encoding="utf-8")
+    monkeypatch.setattr(check_mod, "CONTAINER_MARKER", marker)
+    for url in ("http://localhost:8800", "http://127.0.0.1:8800"):
+        target, note = check_mod._witness_target(url)
+        assert target == "http://host.docker.internal:8800" and note
+    assert check_mod._witness_target("http://192.168.1.20:8800") == ("http://192.168.1.20:8800", None)
+
+
+def test_check_fails_clearly_when_something_else_answers(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A web server that is not a witness is a clear FAIL, not 'unreachable' or a crash."""
+    import httpx
+
+    monkeypatch.chdir(tmp_path)
+    _init_ok()
+    html = httpx.Client(transport=httpx.MockTransport(lambda req: httpx.Response(200, text="<html></html>")))
+    assert run_check(config_path=Path("config.toml"), client=html) == 1
+    assert "not like a witness" in capsys.readouterr().out
+
+
+def test_rt42_witness_nodes_file_is_parsed_not_searched(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """node-10 does not count as node-1, and a stale key is refused (or replaced with --force)."""
+    monkeypatch.chdir(tmp_path)
+    nodes = Path("data/witness_nodes.toml")
+    nodes.parent.mkdir()
+    nodes.write_text('[nodes]\nnode-10 = "' + "a" * 64 + '"\n', encoding="utf-8")
+    _init_ok()
+    pub = Path("data/node1.pub").read_text(encoding="utf-8")
+    trusted = witness_checks.load_nodes(nodes)
+    assert trusted == {"node-10": "a" * 64, "node-1": pub}
+
+    nodes.write_text('[nodes]\nnode-1 = "' + "b" * 64 + '"\n', encoding="utf-8")
+    capsys.readouterr()
+    assert run_init(config_path=Path("config.toml")) == 1
+    assert "trusts a different key for 'node-1'" in capsys.readouterr().err
+    assert witness_checks.load_nodes(nodes) == {"node-1": "b" * 64}  # left alone
+
+    assert run_init(force=True, config_path=Path("config.toml")) == 0
+    assert witness_checks.load_nodes(nodes) == {"node-1": Path("data/node1.pub").read_text(encoding="utf-8")}
+
+
+def test_rt43_node_id_follows_the_witness_rule() -> None:
+    """The profile accepts exactly the node ids the witness accepts."""
+    from coc.profile import NODE_ID_RE
+
+    assert NODE_ID_RE.pattern == witness_checks.NODE_ID_RE.pattern
+    base = {"profile": {"name": "t"}, "node": {"node_id": "node-1"}}
+    assert validate_profile(base)[1] == []
+    for bad in ("node 1", "node-1\n", "", "x" * 65):
+        _, errors = validate_profile({**base, "node": {"node_id": bad}})
+        assert errors and errors[0].startswith("node.node_id: must match"), bad
+
+
+def test_rt44_force_keeps_an_existing_profile(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """--force regenerates the key pair but never rewrites config.toml."""
+    monkeypatch.chdir(tmp_path)
+    _init_ok()
+    cfg = Path("config.toml")
+    custom = cfg.read_text(encoding="utf-8").replace("example-platform", "my-bank")
+    cfg.write_text(custom, encoding="utf-8")
+    old_pub = Path("data/node1.pub").read_text(encoding="utf-8")
+    _init_ok(force=True)
+    assert cfg.read_text(encoding="utf-8") == custom
+    assert Path("data/node1.pub").read_text(encoding="utf-8") != old_pub
+
+
+@pytest.mark.parametrize(
+    "flags",
+    [
+        {"node_id": 'x"\n[evil]\na="b'},
+        {"node_id": "node 1"},
+        {"witness_url": r"http://10.0.0.5:8800\1"},
+        {"witness_url": "http://10.0.0.5:8800\x01"},
+        {"witness_url": "10.0.0.5:8800"},
+        {"spool_path": "spool/\nevil"},
+    ],
+)
+def test_rt45_bad_flags_are_refused_before_writing(
+    flags: dict[str, str], tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A bad flag gives one clear error, exit 1, and leaves no files behind."""
+    monkeypatch.chdir(tmp_path)
+    assert run_init(config_path=Path("config.toml"), **flags) == 1
+    assert "Error: --" in capsys.readouterr().err
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_rt45_flags_with_special_characters_stay_valid_toml(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Flag values are written as quoted TOML strings, so the profile reads back exactly."""
+    monkeypatch.chdir(tmp_path)
+    _init_ok(spool_path='spool/"odd" name.jsonl', witness_url="http://witness.local:8800/")
+    profile, errors = load_profile("config.toml")
+    assert errors == [] and profile is not None
+    assert profile["paths"]["spool_path"] == 'spool/"odd" name.jsonl'
+
+
+def test_rt45_corrupt_private_key_is_a_clear_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A corrupt key file stops init with one error line, no traceback, and is not replaced."""
+    monkeypatch.chdir(tmp_path)
+    _init_ok()
+    bad = b"-----BEGIN PRIVATE KEY-----\ngarbage\n-----END PRIVATE KEY-----\n"
+    Path("data/node1.key").write_bytes(bad)
+    Path("data/node1.pub").unlink()
+    capsys.readouterr()
+    assert cli_main(["init"]) == 1
+    err = capsys.readouterr().err
+    assert err.startswith("Error: node key:") and "Traceback" not in err
+    assert Path("data/node1.key").read_bytes() == bad

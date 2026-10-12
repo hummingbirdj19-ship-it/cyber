@@ -6,6 +6,8 @@ from typing import Any
 
 TOP_LEVEL_SECTIONS = {"profile", "node", "paths", "checkpoint", "heartbeat", "witness", "collectors"}
 NAME_RE = re.compile(r"^[a-z0-9_-]+$")
+# Same rule as witness/checks.py NODE_ID_RE (the sidecar image has no witness package); a test keeps them equal.
+NODE_ID_RE = re.compile(r"^[A-Za-z0-9_.-]{1,64}$")
 
 
 def type_name(val: Any) -> str:
@@ -96,8 +98,8 @@ def validate_profile(data: Any) -> tuple[dict[str, Any] | None, list[str]]:
         if "node_id" not in node:
             errors.append("node.node_id: missing required key")
         elif _check_type(node["node_id"], "string", "node.node_id", errors):
-            if not node["node_id"]:
-                errors.append("node.node_id: must not be empty")
+            if not NODE_ID_RE.fullmatch(node["node_id"]):
+                errors.append(f"node.node_id: must match {NODE_ID_RE.pattern} (the witness rejects anything else)")
             else:
                 node_out["node_id"] = node["node_id"]
 
@@ -151,7 +153,10 @@ def validate_profile(data: Any) -> tuple[dict[str, Any] | None, list[str]]:
                         hb_out[k] = v
             elif k == "witness_url":
                 if _check_type(v, "string", "heartbeat.witness_url", errors):
-                    hb_out[k] = v
+                    if not re.fullmatch(r"https?://\S+", v):
+                        errors.append("heartbeat.witness_url: must look like http://<host>:<port>")
+                    else:
+                        hb_out[k] = v
 
     # [witness]
     wit = data.get("witness", {})
@@ -168,7 +173,10 @@ def validate_profile(data: Any) -> tuple[dict[str, Any] | None, list[str]]:
                 errors.append(f"witness.{k}: unknown key")
             elif k == "port":
                 if _check_type(v, "integer", "witness.port", errors):
-                    wit_out[k] = v
+                    if not 1 <= v <= 65535:
+                        errors.append("witness.port: must be between 1 and 65535")
+                    else:
+                        wit_out[k] = v
             else:
                 if _check_type(v, "string", f"witness.{k}", errors):
                     wit_out[k] = v
@@ -188,8 +196,10 @@ def validate_profile(data: Any) -> tuple[dict[str, Any] | None, list[str]]:
                 if req not in c:
                     errors.append(f"{prefix}.{req}: missing required key")
             c_name = c.get("name")
-            if isinstance(c_name, str) and not NAME_RE.match(c_name):
+            if isinstance(c_name, str) and not NAME_RE.fullmatch(c_name):
                 errors.append(f"{prefix}.name: must match ^[a-z0-9_-]+$")
+            elif isinstance(c_name, str) and any(o.get("name") == c_name for o in collectors_out):
+                errors.append(f"{prefix}.name: '{c_name}' is used by another collector (names must be unique)")
             c_type = c.get("type")
             if isinstance(c_type, str) and c_type not in ("json_lines", "access_log", "db_audit"):
                 errors.append(f"{prefix}.type: must be one of json_lines, access_log, db_audit")
