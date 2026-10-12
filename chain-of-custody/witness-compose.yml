@@ -1,0 +1,25 @@
+# Witness laptop: the witness only, from the published image. No clone and no config.toml needed.
+# In this folder: witness_nodes.toml, made with `coc trust <node_id> <public key>` (see docs/INTEGRATION.md).
+# COC_INTERVAL_S must equal the sidecar profile's [heartbeat] interval_s: SILENCE fires after 2 * interval + 15 s.
+# Open inbound TCP ${COC_WITNESS_PORT:-8800} in this laptop's firewall.
+
+services:
+  witness:
+    image: ${COC_IMAGE_PREFIX:-ghcr.io/jeevikas-19}/coc-witness:${COC_TAG:-latest}
+    container_name: chain-of-custody-witness
+    restart: unless-stopped
+    ports:
+      - "${COC_WITNESS_PORT:-8800}:8800"
+    volumes:
+      # Witness DB in its own named volume
+      - witness-data:/app/data
+      # The trusted node keys, read-only
+      - ./witness_nodes.toml:/etc/coc/witness_nodes.toml:ro
+    environment:
+      - PYTHONUNBUFFERED=1
+    command: ["python", "-m", "witness.app", "--host", "0.0.0.0", "--port", "8800",
+              "--nodes-file", "/etc/coc/witness_nodes.toml", "--db-path", "/app/data/witness.db",
+              "--interval-s", "${COC_INTERVAL_S:-30}"]
+
+volumes:
+  witness-data:

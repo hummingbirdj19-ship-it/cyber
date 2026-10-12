@@ -326,17 +326,17 @@ def test_rt41_no_wrapper_copies_outside_the_project() -> None:
 
 def test_rt40_localhost_means_the_host_inside_a_container(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """In a container, localhost witness URLs are checked at host.docker.internal; elsewhere unchanged."""
-    from coc import check as check_mod
+    from sidecar import heartbeat as hbm  # one rule for coc check, coc verify and the sidecar (I2)
 
-    monkeypatch.setattr(check_mod, "CONTAINER_MARKER", tmp_path / "absent")
-    assert check_mod._witness_target("http://localhost:8800") == ("http://localhost:8800", None)
+    monkeypatch.setattr(hbm, "CONTAINER_MARKER", tmp_path / "absent")
+    assert hbm.resolve_witness_url("http://localhost:8800") == ("http://localhost:8800", None)
     marker = tmp_path / ".dockerenv"
     marker.write_text("", encoding="utf-8")
-    monkeypatch.setattr(check_mod, "CONTAINER_MARKER", marker)
-    for url in ("http://localhost:8800", "http://127.0.0.1:8800"):
-        target, note = check_mod._witness_target(url)
+    monkeypatch.setattr(hbm, "CONTAINER_MARKER", marker)
+    for url in ("http://localhost:8800", "http://127.0.0.1:8800", "http://[::1]:8800"):
+        target, note = hbm.resolve_witness_url(url)
         assert target == "http://host.docker.internal:8800" and note
-    assert check_mod._witness_target("http://192.168.1.20:8800") == ("http://192.168.1.20:8800", None)
+    assert hbm.resolve_witness_url("http://192.168.1.20:8800") == ("http://192.168.1.20:8800", None)
 
 
 def test_check_fails_clearly_when_something_else_answers(

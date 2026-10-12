@@ -9,7 +9,7 @@ from pathlib import Path
 
 from coc.profile import load_profile
 from sidecar.checkpoint import make_checkpoint_tick
-from sidecar.heartbeat import start_heartbeat_thread
+from sidecar.heartbeat import resolve_witness_url, start_heartbeat_thread
 from sidecar.ingest import IngestStopError, follow_spool
 from sidecar.keys import load_or_generate_keypair
 from sidecar.store import count_entries, init_db
@@ -63,6 +63,9 @@ def run_sidecar(config_path: Path, witness_url_override: str | None = None) -> i
     hb_interval_s = float(hb_cfg.get("interval_s", 30))
     hb_thread = None
     if witness_url:
+        witness_url, note = resolve_witness_url(witness_url)  # same rule as coc check (I2)
+        if note:
+            logger.info("Witness URL: %s", note)
         logger.info("Starting heartbeat to witness at %s (interval: %ss)", witness_url, hb_interval_s)
         hb_thread = start_heartbeat_thread(
             db_path=db_path,

@@ -22,6 +22,11 @@ logger = logging.getLogger("witness")
 ALERT_THROTTLE_S = 10
 SWEEP_EVERY_S = 5.0
 MAX_BODY_BYTES = 16 * 1024  # real heartbeats and checkpoints are under 1 KiB
+# Defaults when no profile is given (witness laptop, I2); they match config.example.toml.
+DEFAULT_INTERVAL_S = 30
+DEFAULT_NODES_FILE = "data/witness_nodes.toml"
+DEFAULT_DB_PATH = "data/witness.db"
+DEFAULT_PORT = 8800
 
 
 class BodyLimit:
@@ -58,15 +63,41 @@ def iso_utc(epoch: float) -> str:
     return datetime.fromtimestamp(epoch, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+def witness_settings(
+    config_path: Path | None = None,
+    nodes_file: Path | None = None,
+    interval_s: float | None = None,
+    db_path: Path | None = None,
+    port: int | None = None,
+) -> dict[str, Any]:
+    """Resolve witness settings: explicit value, else the profile (if any), else the default."""
+    config: dict[str, Any] = {}
+    if config_path is not None:
+        with open(config_path, "rb") as f:
+            config = tomllib.load(f)
+    hb, wit = config.get("heartbeat", {}), config.get("witness", {})
+    return {
+        "interval_s": float(interval_s if interval_s is not None else hb.get("interval_s", DEFAULT_INTERVAL_S)),
+        "nodes_file": Path(nodes_file or wit.get("nodes_file", DEFAULT_NODES_FILE)),
+        "db_path": Path(db_path or wit.get("db_path", DEFAULT_DB_PATH)),
+        "port": int(port if port is not None else wit.get("port", DEFAULT_PORT)),
+    }
+
+
 def create_app(
-    config_path: Path, now: Callable[[], float] = time.time, nodes_file: Path | None = None
+    config_path: Path | None = None,
+    now: Callable[[], float] = time.time,
+    nodes_file: Path | None = None,
+    interval_s: float | None = None,
+    db_path: Path | None = None,
 ) -> FastAPI:
-    """Build the witness app from a profile; `now` is the witness clock, `nodes_file` overrides the profile."""
-    with open(config_path, "rb") as f:
-        config = tomllib.load(f)
-    interval_s = float(config["heartbeat"]["interval_s"])
-    nodes = checks.load_nodes(nodes_file or Path(config["witness"]["nodes_file"]))  # refuses missing or folder
-    conn = store.connect(config["witness"]["db_path"])
+    """Build the witness app; `now` is the witness clock. Explicit arguments override the profile."""
+    settings = witness_settings(config_path, nodes_file, interval_s, db_path)
+    interval_s = settings["interval_s"]
+    if interval_s <= 0:
+        raise ValueError("interval_s must be greater than 0")
+    nodes = checks.load_nodes(settings["nodes_file"])  # refuses missing or folder
+    conn = store.connect(settings["db_path"])
     lock = threading.Lock()
     started_at = now()
 
@@ -171,23 +202,37 @@ def create_app(
 
 
 def main(argv: list[str] | None = None) -> int:
-    """CLI entry point: serve the witness on the profile's [witness] port."""
+    """CLI entry point: serve the witness; flags override the profile, which is optional."""
     import uvicorn
 
+    # Show the witness's own INFO lines (settings, silence sweep) next to uvicorn's.
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
     parser = argparse.ArgumentParser(prog="python -m witness.app", description=__doc__)
-    parser.add_argument("--config", type=Path, default=Path("config.toml"), help="profile configuration path")
+    parser.add_argument("--config", type=Path, default=None,
+                        help="profile configuration path (default: config.toml if present, else built-in defaults)")
     parser.add_argument("--host", default="127.0.0.1", help="bind address (use 0.0.0.0 in a container)")
     parser.add_argument("--nodes-file", type=Path, default=None, help="override [witness] nodes_file")
+    parser.add_argument("--interval-s", type=float, default=None,
+                        help="the sidecar's [heartbeat] interval_s; sets the SILENCE window (default 30)")
+    parser.add_argument("--db-path", type=Path, default=None, help="override [witness] db_path")
+    parser.add_argument("--port", type=int, default=None, help="override [witness] port (default 8800)")
     args = parser.parse_args(argv)
-    with open(args.config, "rb") as f:
-        config = tomllib.load(f)
+    config_path = args.config
+    if config_path is None and Path("config.toml").is_file():
+        config_path = Path("config.toml")
     try:
-        app = create_app(args.config, nodes_file=args.nodes_file)
-    except (FileNotFoundError, ValueError) as exc:  # missing, folder or malformed nodes_file
+        if config_path is not None and not config_path.is_file():
+            raise FileNotFoundError(f"config file '{config_path}' is missing")
+        settings = witness_settings(config_path, args.nodes_file, args.interval_s, args.db_path, args.port)
+        app = create_app(config_path, nodes_file=args.nodes_file, interval_s=args.interval_s, db_path=args.db_path)
+    except (FileNotFoundError, ValueError) as exc:  # missing config, missing/folder/malformed nodes_file
         logger.error("%s", exc)
         sys.stderr.write(f"Error: {exc}\n")
         return 2
-    uvicorn.run(app, host=args.host, port=int(config["witness"]["port"]))
+    logger.info("Witness: nodes_file=%s db=%s interval_s=%s (SILENCE after %ss without a heartbeat)",
+                settings["nodes_file"], settings["db_path"], settings["interval_s"],
+                2 * settings["interval_s"] + checks.SILENCE_MARGIN_S)
+    uvicorn.run(app, host=args.host, port=settings["port"])
     return 0
 
 

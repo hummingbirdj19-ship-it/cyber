@@ -1,0 +1,56 @@
+# Build and publish the defence images to GitHub Container Registry (step I2).
+# ghcr.io/<owner>/coc-sidecar and coc-witness, for linux/amd64 and linux/arm64, tagged latest and sha-<short>.
+name: publish-images
+
+on:
+  push:
+    branches: [main]
+    paths: ["chain-of-custody/**", ".github/workflows/publish-images.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: publish-images
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        image: [sidecar, witness]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Lowercase image prefix (GHCR needs lowercase)
+        run: echo "PREFIX=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_ENV"
+
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Short commit id
+        run: echo "SHORT_SHA=${GITHUB_SHA::7}" >> "$GITHUB_ENV"
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: chain-of-custody
+          file: chain-of-custody/${{ matrix.image }}/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ${{ env.PREFIX }}/coc-${{ matrix.image }}:latest
+            ${{ env.PREFIX }}/coc-${{ matrix.image }}:sha-${{ env.SHORT_SHA }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.description=Chain of Custody ${{ matrix.image }} (tamper-evident logging)

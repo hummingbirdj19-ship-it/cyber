@@ -71,8 +71,8 @@ docker inspect chain-of-custody-sidecar --format "{{json .Mounts}}"
 - No mount may have the name `witness-data` (only the witness may see that volume).
 
 ```
-docker run --rm chain-of-custody-sidecar:latest find /app -name "*.key" -o -name "*.pub" -o -name "*.db" -o -name config.toml
-docker run --rm chain-of-custody-witness:latest find /app -name "*.key" -o -name "*.pub" -o -name "*.db" -o -name config.toml
+docker run --rm ghcr.io/jeevikas-19/coc-sidecar:latest find /app -name "*.key" -o -name "*.pub" -o -name "*.db" -o -name config.toml
+docker run --rm ghcr.io/jeevikas-19/coc-witness:latest find /app -name "*.key" -o -name "*.pub" -o -name "*.db" -o -name config.toml
 ```
 - Both must print **nothing**. If they print a file, a secret was copied into the image.
 

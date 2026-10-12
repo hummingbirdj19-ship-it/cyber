@@ -199,9 +199,30 @@ Hiccups:
 - Paths inside the wrapper: the container sees the current folder as `/work`, so keep profile paths relative (as `config.example.toml` does). Windows paths with a drive letter will not resolve inside the container.
 - Do not reuse `init_db` in `coc check`: it creates the DB if it is missing. Open SQLite read-only (`file:...?mode=ro`, `uri=True`).
 
-## I2: Split compose and publish images (outline, detail before starting)
-- `sidecar-compose.yml` runs next to the platform; `witness-compose.yml` runs on the witness laptop. Images use `image:` from GitHub Container Registry, not `build:`.
-- Done when: on the second laptop, only the witness compose file, the `coc` wrapper and `witness_nodes.toml` are needed; the platform laptop needs no clone of this repo.
+## I2: Split compose and publish images
+Build:
+- Image names everywhere: `ghcr.io/jeevikas-19/coc-sidecar` and `ghcr.io/jeevikas-19/coc-witness` (GHCR wants a lowercase owner). Compose files take `${COC_IMAGE_PREFIX:-ghcr.io/jeevikas-19}` and `${COC_TAG:-latest}`, so a fork or a pinned version needs no edit. `defence-compose.yml` keeps `build:` (local dev and the single-host demo) and tags its builds with the same names, so a local build is exactly what the wrappers run. Container names stay `chain-of-custody-sidecar` / `-witness`.
+- Publishing: `.github/workflows/publish-images.yml` (repo root, where GitHub reads workflows). On push to main touching `chain-of-custody/**`, and by hand (`workflow_dispatch`): build both images for `linux/amd64` and `linux/arm64` (Apple-silicon laptops), push `latest` and `sha-<short>`, with `GITHUB_TOKEN` (`packages: write`), no personal token. The repo is public, so the packages are public; images hold code only (`.dockerignore`).
+- `sidecar-compose.yml` (platform laptop): the sidecar only, `image:` not `build:`. Mounts as in `defence-compose.yml` (spool read-only, `./data`, `./config.toml` read-only). No `--witness-url` override: the profile's `[heartbeat] witness_url` is used (set by `coc init --witness-url`). `extra_hosts: host.docker.internal:host-gateway`.
+- `witness-compose.yml` (witness laptop): the witness only, `image:`. Needs no `config.toml`: the witness gets `--interval-s`, `--db-path`, `--port` flags (defaults 30, `data/witness.db`, 8800; a `--config` still works and flags override it). Mounts `./witness_nodes.toml` read-only and the `witness-data` volume. `COC_INTERVAL_S` must equal the sidecar profile's `interval_s`, or SILENCE fires early or late. Host port `${COC_WITNESS_PORT:-8800}`.
+- One rule for "localhost" in a container: `sidecar.heartbeat.resolve_witness_url` maps `localhost` / `127.0.0.1` / `::1` to `host.docker.internal` when running in a container (`/.dockerenv`). The sidecar, `coc check` and `coc verify` all use it, so a check never passes while the sidecar cannot reach the witness. Outside a container nothing changes.
+- New `coc` commands, so neither laptop needs a clone or a host Python:
+  - `coc trust <node_id> <public_key_hex> [--nodes-file witness_nodes.toml]` (witness laptop): adds the node to the trust file, with the same rules as `coc init` (parsed, not searched; a different key for the same node is refused unless `--replace`). Validates the node id (witness rule) and the key (64 hex characters). Replaces hand-editing in Notepad (BOM, quoting).
+  - `coc verify [--config] [--witness URL] [--node-id]`: the verifier, run from the image, same output and exit codes as `python -m verifier`.
+  - `coc init` prints the exact `coc trust ...` line for the witness laptop.
+- `coc init` without a `config.example.toml` (no clone) uses the built-in template; a test keeps the two identical.
+- Wrappers default to `ghcr.io/jeevikas-19/coc-sidecar:latest` (`COC_IMAGE` overrides).
+
+Done when:
+- Witness laptop: an empty folder with only `witness-compose.yml`, `coc.ps1`/`coc.sh` and the `witness_nodes.toml` made by `coc trust` runs the witness.
+- Platform laptop: an empty folder with only `sidecar-compose.yml` and the wrapper: `coc init --witness-url <witness>`, `docker compose -f sidecar-compose.yml up -d`, `coc check` (PASS, or WARN before the first heartbeat), events in, `coc verify --witness <witness>` clean, exit 0. No clone, no host Python.
+- The workflow publishes both images for both architectures (checked on GitHub after the first push).
+- Each of the above that can run in CI is a pytest test (compose structure, config-less witness, `coc trust`, `coc verify`, the localhost rule, template sync, workflow contents).
+
+Hiccups:
+- Before the first publish the GHCR names do not exist yet; a local `docker compose -f defence-compose.yml build` creates them, so local testing needs no registry.
+- Docker Desktop provides `host.docker.internal` itself; Linux needs the `host-gateway` entry (in the wrappers and `sidecar-compose.yml`).
+- Witness laptop firewall: inbound TCP 8800 must be open (Windows: allow it for Docker Desktop or add a rule).
 
 ## I3: Collectors (outline, waits for CONTRACT v0.3 OK)
 - `collectors/` with `json_lines`, `access_log`, `db_audit` as in CONTRACT section 7, run by `coc collect` as the single spool writer. `coc check` layer 5 tests each collector against real data.
