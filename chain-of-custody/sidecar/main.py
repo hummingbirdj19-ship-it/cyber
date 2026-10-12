@@ -7,6 +7,7 @@ import threading
 import tomllib
 from pathlib import Path
 
+from coc.profile import load_profile
 from sidecar.checkpoint import make_checkpoint_tick
 from sidecar.heartbeat import start_heartbeat_thread
 from sidecar.ingest import IngestStopError, follow_spool
@@ -23,12 +24,11 @@ logger = logging.getLogger("sidecar")
 
 def run_sidecar(config_path: Path, witness_url_override: str | None = None) -> int:
     """Initialize store and run sidecar ingestion using the given config file."""
-    if not config_path.exists():
-        logger.error("Configuration file not found: %s", config_path)
+    config, errors = load_profile(config_path)
+    if errors or config is None:
+        for err in errors:
+            logger.error("Profile error: %s", err)
         return 2
-
-    with open(config_path, "rb") as f:
-        config = tomllib.load(f)
 
     db_path = Path(config["paths"]["db_path"])
     spool_path = Path(config["paths"]["spool_path"])

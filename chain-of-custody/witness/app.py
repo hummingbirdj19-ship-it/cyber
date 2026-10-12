@@ -65,7 +65,7 @@ def create_app(
     with open(config_path, "rb") as f:
         config = tomllib.load(f)
     interval_s = float(config["heartbeat"]["interval_s"])
-    nodes = checks.load_nodes(nodes_file or Path(config["witness"]["nodes_file"]))
+    nodes = checks.load_nodes(nodes_file or Path(config["witness"]["nodes_file"]))  # refuses missing or folder
     conn = store.connect(config["witness"]["db_path"])
     lock = threading.Lock()
     started_at = now()
@@ -180,8 +180,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--nodes-file", type=Path, default=None, help="override [witness] nodes_file")
     args = parser.parse_args(argv)
     with open(args.config, "rb") as f:
-        port = int(tomllib.load(f)["witness"]["port"])
-    uvicorn.run(create_app(args.config, nodes_file=args.nodes_file), host=args.host, port=port)
+        config = tomllib.load(f)
+    try:
+        app = create_app(args.config, nodes_file=args.nodes_file)
+    except (FileNotFoundError, ValueError) as exc:  # missing, folder or malformed nodes_file
+        logger.error("%s", exc)
+        sys.stderr.write(f"Error: {exc}\n")
+        return 2
+    uvicorn.run(app, host=args.host, port=int(config["witness"]["port"]))
     return 0
 
 

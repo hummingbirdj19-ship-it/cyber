@@ -53,6 +53,7 @@ When stuck, paste: the step number, the exact error, and what you expected.
 - **Run witness service**: `python -m witness.app --config config.toml`
 - **Run sidecar ingest**: `python -m sidecar.main --config config.toml`
 - **Verify log integrity**: `python -m verifier --config config.toml [--witness http://localhost:8800 --node-id node-1]`
+- **Set up and check with Docker only**: `.\coc.ps1 init` then `.\coc.ps1 check` (`./coc.sh` on macOS/Linux; build the images first)
 - **Run with Docker**: `docker compose -f defence-compose.yml up -d`
 - **Run tampering self-test**: `python -m tests.test_tampering`
 - **Plug in a platform**: see [docs/INTEGRATION.md](docs/INTEGRATION.md)

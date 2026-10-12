@@ -6,11 +6,11 @@ Rule: a step is DONE only when its "Done when" check (DEFENCE_STEPS.md) AND its 
 Status key: [ ] todo, [~] in progress, [x] done, [!] red team broke it, needs fix
 
 ## Current state
-- Current step: D0-D10 done, every red-team gate ticked (2026-10-12, Jeev's go-ahead after Claude re-checked each item). Now: I1 fixes on branch `step-i1` (RT-39 to RT-44), I0 still waiting for Jaganath
-- Last agent: Claude (re-checked D0-D9 gates: 157/157 tests on real Python 3.11.17 in the sidecar image, fresh validator and verifier attacks, verifier sabotaged twice for D9. Red-teamed Antigravity's I1 at 3c33680)
+- Current step: D0-D10 and I1 done, every gate ticked (2026-10-12). Next: I2 (split compose, published images). I0 still waits for Jaganath's OK, which blocks I3
+- Last agent: Claude (fixed I1 RT-39 to RT-45, RT-47 to RT-49 in 5662697 on `step-i1`, merged to main; checked the coc wrapper end to end through Docker against a real witness on the host. Before that: re-checked the D0-D9 gates)
 - Layout: README, AGENTS.md, CLAUDE.md stay at the root (agents load them there); .antigravity/tasks.md stays where Antigravity reads it
-- Last commit reviewed: 3c33680 (I1, branch `step-i1`); pytest 164 passed on it
-- Open bugs: I1 RT-39 to RT-47 (see log). `tests/test_redteam_d5_d7.py::test_rt25_heartbeat_thread_survives_db_error` fails in most full runs on Windows (passes alone and on Linux): the test sleeps a fixed 0.6 s, but `httpx.Client()` loading the CA bundle takes longer after the witness tests. Test-only bug; fix by polling for `calls >= 2` with a 5 s deadline. Not yet verified: Linux file ownership (RT-38; the Docker run was on Windows)
+- Last commit reviewed: 5662697 (I1 fixes); pytest 179 passed from chain-of-custody/ on Windows (3 runs in a row) and on Python 3.11.17 in the sidecar image
+- Open bugs: none known. Run pytest from chain-of-custody/: from the repo root 7 older packaging tests fail (they read files by relative path; not a code bug). Not yet verified: Linux file ownership of sidecar-written files (RT-38), coc.sh on a real Linux host (syntax-checked only)
 - Contract notes RT-24 (hb_counter per send attempt) and RT-28 (verifier reports witness FORK / SEQ_ROLLBACK alerts): folded into the CONTRACT v0.3 draft
 - New CLI flags (deployment overrides, profile keys unchanged): verifier `--node-id`, sidecar `--witness-url`, witness `--nodes-file`
 - Window between heartbeats: newest interval_s + 2.5 s of events (32.5 s at default) can be removed or rewritten with no witness verdict
@@ -141,13 +141,13 @@ Decisions (Jeev, 2026-10-10): collectors move into the defence (CONTRACT v0.3); 
 - [ ] Jaganath approves v0.2 + v0.3 and updates his pinned copy; then drop "DRAFT" from the CONTRACT title
 
 ## I1: `coc init` and `coc check`
-- [!] Build (Antigravity, branch `step-i1`, 3c33680, not merged; red-teamed 2026-10-12: RT-39 to RT-47 below, fix RT-39 to RT-44 before merging)
+- [x] Build (Antigravity 3c33680, red-team fixes 5662697, merged to main 2026-10-12)
 
 Red-team gate
-- [!] Fresh clone: `coc init` then `coc check` pass with no manual edits (works with `python -m coc`; through the wrapper it breaks: RT-39, RT-40)
+- [x] Fresh clone: `coc init` then `coc check` pass with no manual edits (through `coc.ps1` in an empty folder, witness on the host at localhost: exit 0, spool WARN only)
 - [x] Broken profile (typo'd key, wrong type, missing key file, TOML syntax error): one clear error each, no stack trace (also typo'd section and float interval; gaps in RT-42, RT-45)
 - [x] Witness laptop off: `coc check` fails in about 5 s with the network checklist, never hangs (4.4 s on Windows)
-- [x] `coc init` run twice changes nothing; `--force` is refused while the sidecar DB exists (but see RT-43, RT-44)
+- [x] `coc init` run twice changes nothing; `--force` is refused while the sidecar DB exists (and --force keeps config.toml, RT-44 fixed)
 - [x] After `coc check`, the DB, spool, offsets and keys are byte-identical and the witness has no new rows (`check` only GETs; it does leave empty `sidecar.db-wal`/`-shm` files, RT-46)
 - [x] The private key never appears in any output, log or error message
 - [x] Witness refuses to start when `nodes_file` is missing or a folder
@@ -211,14 +211,16 @@ Red-team gate
 | D0/D6 | RT-16 unpinned requirements, RT-27 no body limit (carried) | WEAKENS / NITPICK | 29141c8 |
 | D10 | RT-35 Witness on the same host in demo compose | WEAKENS: host admin can reach it | accepted for demo, documented |
 | D10 | RT-38 Root-owned data/ on Linux | WEAKENS: host verifier may not open DB | documented, untested |
-| I1 | RT-39 Run `coc.ps1` outside the repo folder | BREAKS: `No module named coc` (image code is in /app, wrapper runs in /work); inside the repo it runs the mounted source, not the image. Fix: `ENV PYTHONPATH=/app` in sidecar/Dockerfile | open |
-| I1 | RT-40 `coc check` through the wrapper, witness on the same host | BREAKS: `localhost:8800` is the container itself, always "unreachable" (confirmed with a listener on host 8800; `host.docker.internal` reached it) | open |
-| I1 | RT-41 `coc init` from the repo root (wrapper copies at `cybersec_hackathon/coc.ps1`, `coc.sh`) | WEAKENS: writes config.toml and data/node1.key where chain-of-custody/.gitignore does not apply; `git add .` commits the private key. Fix: delete the root copies | open |
-| I1 | RT-42 `coc init` with node-1 when node-10 is in witness_nodes.toml, or after a new key pair | WEAKENS: substring check reports [EXISTS]; node-1 never added / stale key kept, witness rejects every heartbeat. Fix: parse with tomllib and compare the key | open |
-| I1 | RT-43 `node_id = "node 1"` (space) | WEAKENS: profile and init accept it, witness NODE_ID_RE rejects it later. Fix: same regex in coc/profile.py | open |
-| I1 | RT-44 `coc init --force` with no DB | WEAKENS: overwrites config.toml with the template, custom profile lost silently. Fix: --force regenerates keys only | open |
-| I1 | RT-45 Corrupt private key / `--witness-url` with `\1` / injected `--node-id` | NITPICK: init tracebacks (PEM error, re.error); injected node-id leaves a broken config.toml so later inits fail. Fix: validate flags before writing, lambda in re.sub, catch key load | open |
+| I1 | RT-39 Run `coc.ps1` outside the repo folder | BREAKS: `No module named coc` (image code is in /app, wrapper runs in /work); inside the repo it runs the mounted source, not the image. Fix: `ENV PYTHONPATH=/app` in sidecar/Dockerfile | 5662697 |
+| I1 | RT-40 `coc check` through the wrapper, witness on the same host | BREAKS: `localhost:8800` is the container itself, always "unreachable" (confirmed with a listener on host 8800; `host.docker.internal` reached it) | 5662697 |
+| I1 | RT-41 `coc init` from the repo root (wrapper copies at `cybersec_hackathon/coc.ps1`, `coc.sh`) | WEAKENS: writes config.toml and data/node1.key where chain-of-custody/.gitignore does not apply; `git add .` commits the private key. Fix: delete the root copies | 5662697 |
+| I1 | RT-42 `coc init` with node-1 when node-10 is in witness_nodes.toml, or after a new key pair | WEAKENS: substring check reports [EXISTS]; node-1 never added / stale key kept, witness rejects every heartbeat. Fix: parse with tomllib and compare the key | 5662697 |
+| I1 | RT-43 `node_id = "node 1"` (space) | WEAKENS: profile and init accept it, witness NODE_ID_RE rejects it later. Fix: same regex in coc/profile.py | 5662697 |
+| I1 | RT-44 `coc init --force` with no DB | WEAKENS: overwrites config.toml with the template, custom profile lost silently. Fix: --force regenerates keys only | 5662697 |
+| I1 | RT-45 Corrupt private key / `--witness-url` with `\1` / injected `--node-id` | NITPICK: init tracebacks (PEM error, re.error); injected node-id leaves a broken config.toml so later inits fail. Fix: validate flags before writing, lambda in re.sub, catch key load | 5662697 |
 | I1 | RT-46 `coc check` on a closed WAL DB | NITPICK: creates empty sidecar.db-wal/-shm (main DB byte-identical; the verifier does the same) | accepted |
-| I1 | RT-47 coc.sh on Linux runs the container as root | WEAKENS: config.toml and keys root-owned on the host (RT-38 again). Fix: `--user "$(id -u):$(id -g)"` | open |
+| I1 | RT-47 coc.sh on Linux runs the container as root | WEAKENS: config.toml and keys root-owned on the host (RT-38 again). Fix: `--user "$(id -u):$(id -g)"` | 5662697 |
+| I1 | RT-48 `test_unreachable_witness_fails_quickly_with_checklist` ran `coc init` in the working directory | WEAKENS: every test run wrote a key pair and witness_nodes.toml into chain-of-custody/data, or into the repo root (not ignored there) when run from the root | 5662697 (test chdirs to tmp_path; root .gitignore added) |
+| I1 | RT-49 `--witness-url` with a control character (`\x01`) | NITPICK: passed the URL check and was written into config.toml | 5662697 |
 
 Full detail (why it broke, plan, verification), all in docs/red-team/: RED_TEAM_D0_D4.md (RT-01 to RT-16, including nitpicks RT-09, RT-14 to RT-16) RED_TEAM_D5_D7.md (RT-17 to RT-27, including nitpicks RT-22, RT-27) and RED_TEAM_D8_D10.md (RT-28 to RT-38, plus RT-16 and RT-27 closed)

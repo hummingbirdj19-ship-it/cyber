@@ -221,7 +221,10 @@ def test_rt25_heartbeat_thread_survives_db_error(tmp_path: Path, monkeypatch: py
     monkeypatch.setattr(hbm, "pulse_once", flaky_pulse)
     stop = threading.Event()
     th = hbm.start_heartbeat_thread(tmp_path / "s.db", "node-1", priv, "http://127.0.0.1:9", 0.05, stop, 0.1)
-    time.sleep(0.6)
+    # Poll, not a fixed sleep: building httpx.Client() (CA bundle) can take over a second on Windows.
+    deadline = time.monotonic() + 5.0
+    while len(calls) < 2 and time.monotonic() < deadline:
+        time.sleep(0.05)
     alive = th.is_alive()
     stop.set()
     th.join(timeout=3.0)

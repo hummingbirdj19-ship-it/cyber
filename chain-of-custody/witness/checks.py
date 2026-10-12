@@ -22,6 +22,14 @@ UNKNOWN_NODE = "(unknown)"  # alert bucket for node_ids not in nodes_file; NODE_
 
 def load_nodes(path: Path) -> dict[str, str]:
     """Read the trusted node map: [nodes] node_id = "<hex public key>"."""
+    path = Path(path)
+    if not path.exists():
+        raise FileNotFoundError(f"nodes_file '{path}' is missing")
+    if path.is_dir():
+        raise ValueError(
+            f"nodes_file '{path}' is a directory, not a file "
+            "(Docker creates a folder when the file is missing on the host)"
+        )
     with open(path, "rb") as f:
         nodes = tomllib.load(f).get("nodes", {})
     if not isinstance(nodes, dict) or not all(isinstance(v, str) for v in nodes.values()):

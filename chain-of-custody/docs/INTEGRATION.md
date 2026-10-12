@@ -54,14 +54,14 @@ The platform's compose file includes `defence-compose.yml` unchanged. Per platfo
 Keep the profile's paths relative and under `spool/` and `data/` (as in `config.example.toml`). Then the same profile works on the host and in the containers. Inside Compose the sidecar reaches the witness at `http://witness:8800`; the compose file passes that with `--witness-url`, so the profile can keep `localhost` for host runs.
 
 ### First start
-1. Copy `config.example.toml` to `config.toml` and set the paths and `node_id`.
-2. Create the node key: `docker compose -f defence-compose.yml run --rm --no-deps sidecar python -c "from pathlib import Path; from sidecar.keys import load_or_generate_keypair as k; print(k(Path('data/node1.key'), Path('data/node1.pub'))[1])"`
-3. Write `data/witness_nodes.toml` with that key (see `witness_nodes.example.toml`). Do this before step 4: if the file is missing, Docker creates a folder with that name.
-4. `docker compose -f defence-compose.yml up -d`
+1. Build the images: `docker compose -f defence-compose.yml build`
+2. `.\coc.ps1 init` (Windows) or `./coc.sh init` (macOS/Linux). Optional: `--node-id`, `--spool`, `--witness-url`. It writes `config.toml`, the node key pair and `data/witness_nodes.toml`, and prints the line the witness laptop needs. Run twice, it changes nothing; it never overwrites `config.toml`.
+3. `docker compose -f defence-compose.yml up -d`
+4. `.\coc.ps1 check` (or `./coc.sh check`): one PASS/WARN/FAIL line per layer, exit 0 when nothing failed. It only reads: no DB, spool or key changes, no heartbeat sent. Inside the wrapper a `localhost` witness URL is checked on the host (`host.docker.internal`).
 5. On the host: `python -m verifier --config config.toml --witness http://localhost:8800 --node-id node-1`
 
 ### Notes
-- Linux hosts: the containers run as root, so files in `data/` are root-owned. Run the verifier with sudo, or `chown` the folder, or add `user: "<uid>:<gid>"` to the sidecar service. Docker Desktop (Windows, macOS) is not affected.
+- Linux hosts: `coc.sh` runs as your user, so `config.toml` and the keys it creates are yours. The compose containers still run as root, so files the sidecar writes in `data/` are root-owned. Run the verifier with sudo, or `chown` the folder, or add `user: "<uid>:<gid>"` to the sidecar service. Docker Desktop (Windows, macOS) is not affected.
 - Demo only: here the witness runs on the same host as the platform. A host admin could stop it or edit its volume. In real use, run the witness on a machine the platform's admins cannot reach and point `--witness-url` at it.
 - When auditing, pass `--node-id` yourself instead of trusting the `node_id` in the audited host's `config.toml`. If the witness has no records for that node id, the verifier exits 2, never "clean".
 

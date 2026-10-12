@@ -1,0 +1,2 @@
+# Shell scripts keep LF endings, or bash fails on the carriage return (coc.sh)
+*.sh text eol=lf
