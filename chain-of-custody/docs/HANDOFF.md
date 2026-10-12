@@ -6,11 +6,11 @@ Rule: a step is DONE only when its "Done when" check (DEFENCE_STEPS.md) AND its 
 Status key: [ ] todo, [~] in progress, [x] done, [!] red team broke it, needs fix
 
 ## Current state
-- Current step: D0-D10 built (red-team gates await Jeev's ticks; D10 compose still never run; handed to a teammate via docs/DOCKER_HANDOVER.md). Now: I0 (waiting for Jaganath) and I1 (ready for Antigravity)
-- Last agent: Claude (I0 drafts on branch `contract-change-collectors`: CONTRACT v0.3, AGENTS.md ownership; I0-I4 written into DEFENCE_STEPS.md with gates below. Before that: moved docs into docs/)
+- Current step: D0-D10 built (D0-D9 red-team gates await Jeev's ticks; D10 run in Docker and its gate ticked 2026-10-12). Now: I0 (waiting for Jaganath) and I1 (ready for Antigravity)
+- Last agent: Claude (walked Jeev through DOCKER_HANDOVER.md, D10 verified, handover fixed for Windows PowerShell 5.1 and OneDrive. Before that: I0 drafts, CONTRACT v0.3, I0-I4 in DEFENCE_STEPS.md)
 - Layout: README, AGENTS.md, CLAUDE.md stay at the root (agents load them there); .antigravity/tasks.md stays where Antigravity reads it
 - Last commit reviewed: 4c32d6b plus Antigravity's uncommitted D8-D10 work; D8-D10 and fixes in 29141c8 (pushed); pytest 157 passed (one unexplained single failure in 10 runs, did not repeat)
-- Open bugs: none known. Not yet verified: image build and compose up (no Docker on the review machine), Linux file ownership (RT-38)
+- Open bugs: none known. Not yet verified: Linux file ownership (RT-38; the Docker run was on Windows)
 - Contract notes RT-24 (hb_counter per send attempt) and RT-28 (verifier reports witness FORK / SEQ_ROLLBACK alerts): folded into the CONTRACT v0.3 draft
 - New CLI flags (deployment overrides, profile keys unchanged): verifier `--node-id`, sidecar `--witness-url`, witness `--nodes-file`
 - Window between heartbeats: newest interval_s + 2.5 s of events (32.5 s at default) can be removed or rewritten with no witness verdict
@@ -118,12 +118,13 @@ Red-team gate
 - [ ] Break the verifier on purpose once: the suite goes red
 
 ## D10: Docker packaging
-- [~] Build (RT-31 to RT-34, RT-16, RT-27 fixed; images not built yet, no Docker on the review machine)
+- [x] Build (RT-31 to RT-34, RT-16, RT-27 fixed; run 2026-10-12 on Jeev's machine, Docker Desktop on Windows 11, clone at C:\dev outside OneDrive: both images build, both containers up, heartbeats 200 OK every 30 s, 200 events -> verifier `clean: true`, exit 0)
 
-Red-team gate
-- [ ] Spool mounted read-only in the sidecar container
-- [ ] No keys, DBs or config.toml baked into images
-- [ ] Witness data on its own volume, not reachable from the sidecar container
+Red-team gate (checked 2026-10-12, run of DOCKER_HANDOVER.md)
+- [x] Spool mounted read-only in the sidecar container (`/app/spool` `"RW":false`; config.toml also read-only)
+- [x] No keys, DBs or config.toml baked into images (`find /app` prints nothing in either image)
+- [x] Witness data on its own volume, not reachable from the sidecar container (sidecar mounts only config.toml, data/, spool/)
+- Also seen: sidecar stopped 3 min -> witness SILENCE 75 s after the last heartbeat, verifier `SILENCE`, exit 1. A stop shorter than 75 s raises nothing, as specified. The alert stays in the `witness-data` volume, so the verifier reports it until `down -v`
 
 ## Integration checks (platform repo, separate)
 - [ ] Check A: real platform events pass `tools.validate_spool`
