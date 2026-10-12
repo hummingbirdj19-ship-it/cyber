@@ -40,8 +40,8 @@ Exit code 0 on a long run of real traffic means the platform is integrated. Then
 The platform's compose file includes `defence-compose.yml` unchanged. Per platform you supply only the spool folder, the profile and the witness's list of trusted node keys.
 
 ### Images and services
-- Sidecar image: `chain-of-custody-sidecar:latest` (built from `sidecar/Dockerfile`, Python 3.11)
-- Witness image: `chain-of-custody-witness:latest` (built from `witness/Dockerfile`, Python 3.11)
+- Sidecar image: `ghcr.io/jeevikas-19/coc-sidecar:latest` (from `sidecar/Dockerfile`, Python 3.11; published by `.github/workflows/publish-images.yml`, or built locally by `defence-compose.yml` under the same name)
+- Witness image: `ghcr.io/jeevikas-19/coc-witness:latest` (from `witness/Dockerfile`, Python 3.11; same)
 - Compose file: `defence-compose.yml`. No keys, DBs or `config.toml` go into the images (`.dockerignore`).
 
 ### Mounts
@@ -59,6 +59,22 @@ Keep the profile's paths relative and under `spool/` and `data/` (as in `config.
 3. `docker compose -f defence-compose.yml up -d`
 4. `.\coc.ps1 check` (or `./coc.sh check`): one PASS/WARN/FAIL line per layer, exit 0 when nothing failed. It only reads: no DB, spool or key changes, no heartbeat sent. Inside the wrapper a `localhost` witness URL is checked on the host (`host.docker.internal`).
 5. On the host: `python -m verifier --config config.toml --witness http://localhost:8800 --node-id node-1`
+
+### Two laptops, no clone (published images)
+Each laptop needs Docker and two files from this repo, nothing else. Windows uses `.\coc.ps1`, macOS/Linux `./coc.sh`.
+
+Witness laptop (a folder with `witness-compose.yml` and the wrapper):
+1. `coc trust node-1 <public key>`: the key comes from step 1 on the platform laptop. This writes `witness_nodes.toml` correctly (no Notepad, no BOM).
+2. `docker compose -f witness-compose.yml up -d`. Set `COC_INTERVAL_S` if the profile's `interval_s` is not 30.
+3. Open inbound TCP 8800 in the firewall. Note this laptop's IP address.
+
+Platform laptop (a folder with `sidecar-compose.yml` and the wrapper, next to the platform):
+1. `coc init --witness-url http://<witness laptop IP>:8800`. It prints the `coc trust` line for the witness laptop.
+2. Point the platform's spool at `spool/` here (or set `SPOOL_DIR`), then `docker compose -f sidecar-compose.yml up -d`.
+3. `coc check`: PASS, or WARN until the first heartbeat (30 s).
+4. Audit: `coc verify --witness http://<witness laptop IP>:8800 --node-id node-1`. Exit 0 = clean, 1 = tampering, 2 = the check itself failed.
+
+Pin a version with `COC_TAG=sha-<commit>`. A fork publishes under its own owner: set `COC_IMAGE_PREFIX` (compose) and `COC_IMAGE` (wrappers).
 
 ### Notes
 - Linux hosts: `coc.sh` runs as your user, so `config.toml` and the keys it creates are yours. The compose containers still run as root, so files the sidecar writes in `data/` are root-owned. Run the verifier with sudo, or `chown` the folder, or add `user: "<uid>:<gid>"` to the sidecar service. Docker Desktop (Windows, macOS) is not affected.

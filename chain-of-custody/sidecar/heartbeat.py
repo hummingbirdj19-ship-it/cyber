@@ -5,6 +5,7 @@ import threading
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit, urlunsplit
 
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 import httpx
@@ -15,6 +16,19 @@ from sidecar.store import get_connection, get_last_entry, get_state, set_state
 
 logger = logging.getLogger(__name__)
 DEFAULT_TIMEOUT_S = 2.5
+CONTAINER_MARKER = Path("/.dockerenv")
+LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1"}
+
+
+def resolve_witness_url(witness_url: str) -> tuple[str, str | None]:
+    """In a container, point a localhost witness URL at the host machine; return (url, note or None)."""
+    parts = urlsplit(witness_url)
+    if not CONTAINER_MARKER.exists() or parts.hostname not in LOCAL_HOSTS:
+        return witness_url, None
+    netloc = "host.docker.internal" + (f":{parts.port}" if parts.port else "")
+    url = urlunsplit(parts._replace(netloc=netloc))
+    return url, (f"running in a container, where {parts.hostname} is the container itself; "
+                 f"using the host at {url} instead")
 
 
 def get_persisted_counter(conn: sqlite3.Connection) -> int:

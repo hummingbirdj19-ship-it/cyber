@@ -3,13 +3,15 @@
 # Per platform: the spool folder (SPOOL_DIR), the profile (config.toml) and data/witness_nodes.toml.
 # Keep the profile's paths relative and under spool/ and data/ so they mean the same on the host and in /app.
 # Demo only: the witness runs on the same host here. In real use it runs on a machine the platform admin cannot reach.
+# Two laptops, no clone: sidecar-compose.yml and witness-compose.yml with the published images.
+# This file builds locally and tags the builds with the published names, so the coc wrappers run what you built.
 
 services:
   sidecar:
     build:
       context: .
       dockerfile: sidecar/Dockerfile
-    image: chain-of-custody-sidecar:latest
+    image: ${COC_IMAGE_PREFIX:-ghcr.io/jeevikas-19}/coc-sidecar:${COC_TAG:-latest}
     container_name: chain-of-custody-sidecar
     restart: unless-stopped
     volumes:
@@ -30,7 +32,7 @@ services:
     build:
       context: .
       dockerfile: witness/Dockerfile
-    image: chain-of-custody-witness:latest
+    image: ${COC_IMAGE_PREFIX:-ghcr.io/jeevikas-19}/coc-witness:${COC_TAG:-latest}
     container_name: chain-of-custody-witness
     restart: unless-stopped
     ports:

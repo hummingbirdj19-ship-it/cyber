@@ -76,7 +76,7 @@ def _fail(lines: list[str]) -> int:
     return 1
 
 
-def _ensure_witness_node(nodes_file: Path, node_id: str, pub_hex: str, replace: bool) -> tuple[str, str | None]:
+def ensure_witness_node(nodes_file: Path, node_id: str, pub_hex: str, replace: bool) -> tuple[str, str | None]:
     """Make witness_nodes.toml trust node_id with pub_hex; return (status, error)."""
     entry = f"{node_id} = {json.dumps(pub_hex)}"
     if not nodes_file.exists():
@@ -84,7 +84,7 @@ def _ensure_witness_node(nodes_file: Path, node_id: str, pub_hex: str, replace: 
         nodes_file.write_text(f"[nodes]\n{entry}\n", encoding="utf-8")
         return "CREATED", None
     if nodes_file.is_dir():
-        return "", f"{nodes_file} is a folder, not a file (Docker creates one when the file is missing); delete it and run init again"
+        return "", f"{nodes_file} is a folder, not a file (Docker creates one when the file is missing); delete it and run the command again"
     text = nodes_file.read_text(encoding="utf-8")
     try:
         data: dict[str, Any] = tomllib.loads(text)
@@ -99,7 +99,7 @@ def _ensure_witness_node(nodes_file: Path, node_id: str, pub_hex: str, replace: 
     if current is not None and not replace:
         return "", (
             f"{nodes_file} trusts a different key for '{node_id}' than {pub_hex[:12]}...; "
-            "the witness would reject every heartbeat. Remove that line and run init again"
+            "the witness would reject every heartbeat. Remove that line, or replace it on purpose (coc init --force, coc trust --replace)"
         )
     if current is not None:
         pattern = re.compile(rf"^\s*{re.escape(node_id)}\s*=.*$", re.MULTILINE)
@@ -193,15 +193,16 @@ def run_init(
         print("Note: on Windows, file permissions are not enforced; keep the data folder private.")
 
     # 4. The witness trust entry for this node.
-    status, error = _ensure_witness_node(nodes_file, actual_node_id, pub_hex, replace=force)
+    status, error = ensure_witness_node(nodes_file, actual_node_id, pub_hex, replace=force)
     if error:
         return _fail([error])
     print(f"[{status}] {nodes_file}")
 
     # 5. Next steps (the public key only; the private key is never printed).
     print("\nNext steps:")
-    print("1. On the witness laptop, add this line under [nodes] in its witness_nodes.toml:")
-    print(f'   {actual_node_id} = "{pub_hex}"')
+    print("1. On the witness laptop, in the folder with witness-compose.yml, run:")
+    print(f"   coc trust {actual_node_id} {pub_hex}")
+    print(f'   (or add this line under [nodes] in its witness_nodes.toml: {actual_node_id} = "{pub_hex}")')
     print(f"2. Make sure [heartbeat] witness_url points to the witness laptop (now: {profile['heartbeat']['witness_url']})")
-    print("3. Run 'coc check'")
+    print("3. Start the sidecar, then run 'coc check'")
     return 0

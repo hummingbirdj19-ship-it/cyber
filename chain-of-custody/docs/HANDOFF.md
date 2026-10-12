@@ -6,10 +6,10 @@ Rule: a step is DONE only when its "Done when" check (DEFENCE_STEPS.md) AND its 
 Status key: [ ] todo, [~] in progress, [x] done, [!] red team broke it, needs fix
 
 ## Current state
-- Current step: D0-D10 and I1 done, every gate ticked (2026-10-12). Next: I2 (split compose, published images). I0 still waits for Jaganath's OK, which blocks I3
-- Last agent: Claude (fixed I1 RT-39 to RT-45, RT-47 to RT-49 in 5662697 on `step-i1`, merged to main; checked the coc wrapper end to end through Docker against a real witness on the host. Before that: re-checked the D0-D9 gates)
+- Current step: I2 built on branch `step-i2`, verified locally; not merged. Waiting on Jeev: merge + push to main publishes the images to GHCR (public, the repo is public). After the first publish: check the Actions run and pull-scan the images. I0 still waits for Jaganath's OK, which blocks I3
+- Last agent: Claude (I2: split compose files, published image names, publish workflow, config-less witness, `coc trust`, `coc verify`, one localhost rule for sidecar/check/verify. Two-laptop run simulated in Docker from two empty folders: check PASS, verify clean 200/200)
 - Layout: README, AGENTS.md, CLAUDE.md stay at the root (agents load them there); .antigravity/tasks.md stays where Antigravity reads it
-- Last commit reviewed: 5662697 (I1 fixes); pytest 179 passed from chain-of-custody/ on Windows (3 runs in a row) and on Python 3.11.17 in the sidecar image
+- Last commit reviewed: step-i2 (I2); pytest 197 passed on Windows; on Python 3.11 in the image all pass except the workflow test, which skips there (only chain-of-custody/ is copied in)
 - Open bugs: none known. Run pytest from chain-of-custody/: from the repo root 7 older packaging tests fail (they read files by relative path; not a code bug). Not yet verified: Linux file ownership of sidecar-written files (RT-38), coc.sh on a real Linux host (syntax-checked only)
 - Contract notes RT-24 (hb_counter per send attempt) and RT-28 (verifier reports witness FORK / SEQ_ROLLBACK alerts): folded into the CONTRACT v0.3 draft
 - New CLI flags (deployment overrides, profile keys unchanged): verifier `--node-id`, sidecar `--witness-url`, witness `--nodes-file`
@@ -153,7 +153,15 @@ Red-team gate
 - [x] Witness refuses to start when `nodes_file` is missing or a folder
 
 ## I2: Split compose and publish images
-- [ ] Build (detail before starting)
+- [~] Build (branch `step-i2`; everything but the first real publish is done and checked locally, 2026-10-12)
+
+Red-team gate
+- [~] Published images: no keys, DBs, config.toml or witness_nodes.toml inside (local builds under the published names: scan clean, and the same scan finds a planted key and config.toml; repeat on the pulled images after the first publish)
+- [x] Witness laptop runs from an empty folder with only witness-compose.yml, the wrapper and witness_nodes.toml; platform laptop with only sidecar-compose.yml and the wrapper (simulated on one machine, two folders: `coc check` PASS with heartbeats, `coc verify` clean 200/200, exit 0)
+- [x] Profile witness_url left at localhost inside a container: the sidecar and `coc check` agree (both use `sidecar.heartbeat.resolve_witness_url`; seen in the sidecar log and check output, and tested)
+- [x] `coc trust`: bad node id, bad key, BOM, existing different key: refused with one clear error, file unchanged (tests in tests/test_i2.py)
+- [x] Witness interval differs from the sidecar's: documented. Window = 2 * witness interval + 15 s. Sidecar slower than the window (interval_s > 2 * W + 15): SILENCE between every heartbeat, false alarms. Sidecar faster than W: still works, but a stopped sidecar is noticed only after the witness's longer window. Keep COC_INTERVAL_S equal to the profile's interval_s
+- [x] Workflow: only `packages: write` + `contents: read`, no personal token, runs only on main and by hand (tested: only GITHUB_TOKEN, no pull_request trigger)
 
 ## I3: Collectors (waits for I0 approval)
 - [ ] Build (detail before starting)

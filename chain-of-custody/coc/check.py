@@ -4,30 +4,15 @@ from pathlib import Path
 import sqlite3
 import sys
 from typing import Any
-from urllib.parse import urlsplit, urlunsplit
 
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 import httpx
 
 from coc.profile import load_profile
+from sidecar.heartbeat import resolve_witness_url
 from sidecar.keys import public_key_hex
 from tools.validate_spool import validate_file
-
-
-CONTAINER_MARKER = Path("/.dockerenv")
-LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1"}
-
-
-def _witness_target(witness_url: str) -> tuple[str, str | None]:
-    """Inside a container, point localhost at the host machine; return (url, note to print)."""
-    parts = urlsplit(witness_url)
-    if not CONTAINER_MARKER.exists() or parts.hostname not in LOCAL_HOSTS:
-        return witness_url, None
-    netloc = "host.docker.internal" + (f":{parts.port}" if parts.port else "")
-    url = urlunsplit(parts._replace(netloc=netloc))
-    return url, (f"NOTE  witness: running in a container, where {parts.hostname} is the container itself; "
-                 f"checking the host at {url} instead")
 
 
 def _check_sqlite_ro(db_path: Path) -> str | None:
@@ -157,9 +142,10 @@ def run_check(
         # Layer 4: Witness
         # -------------------------------------------------------------
         node_id = profile["node"]["node_id"]
-        witness_url, note = _witness_target(profile["heartbeat"]["witness_url"].rstrip("/"))
+        # Same rule the sidecar uses, so this check never passes while heartbeats cannot get through.
+        witness_url, note = resolve_witness_url(profile["heartbeat"]["witness_url"].rstrip("/"))
         if note:
-            print(note)
+            print(f"NOTE  witness: {note}")
         hb_url = f"{witness_url}/heartbeats"
 
         try:

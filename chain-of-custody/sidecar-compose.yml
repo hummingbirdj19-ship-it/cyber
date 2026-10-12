@@ -1,0 +1,22 @@
+# Platform laptop: the sidecar only, from the published image. No clone of the defence repo needed.
+# In this folder: config.toml, data/ and the spool folder, made by `coc init` (see docs/INTEGRATION.md).
+# The witness runs elsewhere (witness-compose.yml); the sidecar uses the profile's [heartbeat] witness_url.
+
+services:
+  sidecar:
+    image: ${COC_IMAGE_PREFIX:-ghcr.io/jeevikas-19}/coc-sidecar:${COC_TAG:-latest}
+    container_name: chain-of-custody-sidecar
+    restart: unless-stopped
+    volumes:
+      # Spool folder, read-only, at the path the profile's spool_path ("spool/...") resolves to
+      - ${SPOOL_DIR:-./spool}:/app/spool:ro
+      # Sidecar DB and node keys persist in data/ on the host
+      - ./data:/app/data
+      # Platform profile
+      - ./config.toml:/app/config.toml:ro
+    extra_hosts:
+      # A localhost witness_url means the host machine (Linux needs this entry; Docker Desktop has it built in)
+      - "host.docker.internal:host-gateway"
+    environment:
+      - PYTHONUNBUFFERED=1
+    command: ["python", "-m", "sidecar.main", "--config", "config.toml"]

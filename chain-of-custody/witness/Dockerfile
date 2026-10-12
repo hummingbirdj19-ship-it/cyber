@@ -15,4 +15,4 @@ COPY tools/ tools/
 
 EXPOSE 8800
 
-CMD ["python", "-m", "witness.app", "--config", "config.toml", "--host", "0.0.0.0"]
+CMD ["python", "-m", "witness.app", "--host", "0.0.0.0"]
