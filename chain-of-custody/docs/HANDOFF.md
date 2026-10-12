@@ -7,7 +7,7 @@ Status key: [ ] todo, [~] in progress, [x] done, [!] red team broke it, needs fi
 
 ## Current state
 - Current step: D0-D10, I1 and I2 done (2026-10-12). Images published to GHCR (public, amd64 + arm64). Next: a real two-laptop run (same hotspot, port 8800 open on the witness laptop). I3 waits for Jaganath's contract OK and his two platform changes (audit triggers must cover the users/profiles table too); I4 waits for the hacker repo link
-- Last agent: Claude (I2 merged as 9e376dd and pushed; publish run 38221752153 green; pulled both images anonymously and scanned them. Docs-only commits no longer republish)
+- Last agent: Claude (setup guide site/index.html for teammates, judges and integrators; every setup, demo and reset command on it was run verbatim on two folders with files downloaded from main: check PASS, demo verdicts EDIT, SEQ_GAP, TRUNCATION, SILENCE as stated. Published by .github/workflows/publish-site.yml once Pages uses GitHub Actions. Before that: I2)
 - Layout: README, AGENTS.md, CLAUDE.md stay at the root (agents load them there); .antigravity/tasks.md stays where Antigravity reads it
 - Last commit reviewed: 9e376dd (I2 merge); pytest 197 passed on Windows, 196 + 1 skip on Python 3.11 in the image
 - Open bugs: none known. Run pytest from chain-of-custody/: from the repo root 7 older packaging tests fail (they read files by relative path; not a code bug). Not yet verified: Linux file ownership of sidecar-written files (RT-38), coc.sh on a real Linux host (syntax-checked only)

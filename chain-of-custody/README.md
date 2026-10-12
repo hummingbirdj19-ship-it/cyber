@@ -1,5 +1,7 @@
 # Chain of Custody
 
+**Setup guide, demo script and integration reference: https://jeevikas-19.github.io/cybersec_hackathon/** (source: `site/index.html`)
+
 Standalone, platform-agnostic tamper-evident logging. It sits over any existing platform with a sidecar and one profile file. No change to the platform and no platform-specific code. Hackurity 2026, problem statement 6. Base model.
 
 ## Idea in three lines

@@ -12,3 +12,4 @@ config.toml
 **/__pycache__/
 .pytest_cache/
 CLAUDE.local.md
+site/

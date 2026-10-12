@@ -1,0 +1,589 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chain of Custody</title>
+<meta name="description" content="Tamper-evident logging for any platform: setup guide, demo script and integration reference.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='3' y='9' width='14' height='14' rx='7' fill='none' stroke='%232f6fde' stroke-width='3'/%3E%3Crect x='15' y='9' width='14' height='14' rx='7' fill='none' stroke='%232f6fde' stroke-width='3'/%3E%3C/svg%3E">
+<style>
+:root {
+  --bg: #fbfbfd; --surface: #ffffff; --surface-2: #f2f4f8; --text: #16181d; --muted: #5a6170;
+  --border: #e1e4ea; --accent: #2f6fde; --accent-soft: #e7effd; --ok: #18794e; --ok-soft: #e3f4ea;
+  --warn: #9a5b00; --warn-soft: #fdf1dc; --bad: #c0362c; --bad-soft: #fbe8e6; --code-bg: #f4f5f8;
+  --zone-a: #fff7ec; --zone-b: #eef6f1; --shadow: 0 1px 2px rgba(16,24,40,.06);
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1115; --surface: #161920; --surface-2: #1d212a; --text: #e8eaef; --muted: #9aa3b2;
+    --border: #2a2f3a; --accent: #7aa7ff; --accent-soft: #1b2740; --ok: #5cc98f; --ok-soft: #14291f;
+    --warn: #f0b45a; --warn-soft: #2c2312; --bad: #ff8577; --bad-soft: #321a18; --code-bg: #1a1e26;
+    --zone-a: #2a2216; --zone-b: #16251d; --shadow: none;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1115; --surface: #161920; --surface-2: #1d212a; --text: #e8eaef; --muted: #9aa3b2;
+  --border: #2a2f3a; --accent: #7aa7ff; --accent-soft: #1b2740; --ok: #5cc98f; --ok-soft: #14291f;
+  --warn: #f0b45a; --warn-soft: #2c2312; --bad: #ff8577; --bad-soft: #321a18; --code-bg: #1a1e26;
+  --zone-a: #2a2216; --zone-b: #16251d; --shadow: none;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: 72px; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.6 var(--sans); }
+a { color: var(--accent); }
+code, pre, kbd { font-family: var(--mono); font-size: .9em; }
+:not(pre) > code { background: var(--code-bg); border: 1px solid var(--border); border-radius: 5px; padding: .05em .35em; overflow-wrap: anywhere; }
+
+header.top { position: sticky; top: 0; z-index: 10; background: color-mix(in srgb, var(--bg) 88%, transparent);
+  backdrop-filter: blur(8px); border-bottom: 1px solid var(--border); }
+.top-inner { max-width: 1180px; margin: 0 auto; padding: 10px 16px; display: flex; align-items: center; gap: 16px; }
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 650; text-decoration: none; color: var(--text); white-space: nowrap; }
+.brand svg { flex: none; }
+.top nav { display: flex; gap: 4px; overflow-x: auto; flex: 1; scrollbar-width: none; }
+.top nav a { color: var(--muted); text-decoration: none; padding: 6px 10px; border-radius: 7px; font-size: .92rem; white-space: nowrap; }
+.top nav a:hover, .top nav a.active { color: var(--text); background: var(--surface-2); }
+.theme-btn { border: 1px solid var(--border); background: var(--surface); color: var(--muted); border-radius: 8px; padding: 6px 9px; cursor: pointer; font: inherit; font-size: .85rem; }
+
+main { max-width: 1180px; margin: 0 auto; padding: 0 16px 80px; }
+.hero { padding: 56px 0 28px; }
+.eyebrow { color: var(--accent); font-weight: 600; font-size: .85rem; letter-spacing: .04em; text-transform: uppercase; }
+h1 { font-size: clamp(2rem, 4.5vw, 3rem); line-height: 1.12; margin: 10px 0 14px; letter-spacing: -.02em; }
+.lede { font-size: 1.15rem; color: var(--muted); max-width: 760px; margin: 0; }
+.pills { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 22px; }
+.pill { border: 1px solid var(--border); background: var(--surface); border-radius: 999px; padding: 4px 12px; font-size: .85rem; color: var(--muted); }
+.pill b { color: var(--text); font-weight: 600; }
+
+.audience { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; margin: 26px 0 8px; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; box-shadow: var(--shadow); }
+.audience a.card { text-decoration: none; color: inherit; display: block; }
+.audience a.card:hover { border-color: var(--accent); }
+.card h3 { margin: 0 0 4px; font-size: 1rem; }
+.card p { margin: 0; color: var(--muted); font-size: .93rem; }
+
+section { padding-top: 44px; }
+section > h2 { font-size: 1.6rem; margin: 0 0 6px; letter-spacing: -.01em; }
+.sub { color: var(--muted); margin: 0 0 20px; max-width: 780px; }
+h3 { font-size: 1.12rem; margin: 28px 0 8px; }
+p { max-width: 820px; }
+
+.three { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+.three .card .n { display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 50%;
+  background: var(--accent-soft); color: var(--accent); font-weight: 700; font-size: .85rem; margin-bottom: 8px; }
+
+.diagram { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 12px; margin: 18px 0; overflow-x: auto; }
+.diagram svg { display: block; width: 100%; min-width: 640px; height: auto; }
+.diagram .z-a { fill: var(--zone-a); stroke: var(--border); }
+.diagram .z-b { fill: var(--zone-b); stroke: var(--border); }
+.diagram .box { fill: var(--surface); stroke: var(--border); stroke-width: 1.5; }
+.diagram .box-key { fill: var(--surface); stroke: var(--accent); stroke-width: 1.5; }
+.diagram text { fill: var(--text); font-family: var(--sans); font-size: 13px; }
+.diagram .t-muted { fill: var(--muted); font-size: 11.5px; }
+.diagram .t-zone { fill: var(--muted); font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
+.diagram .t-head { font-weight: 650; }
+.diagram .flow { stroke: var(--accent); stroke-width: 1.8; fill: none; }
+.diagram .flow-dash { stroke: var(--accent); stroke-width: 1.8; fill: none; stroke-dasharray: 6 5; }
+.diagram .arrowhead { fill: var(--accent); }
+
+table { border-collapse: collapse; width: 100%; font-size: .94rem; }
+.table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); margin: 12px 0; }
+th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--border); vertical-align: top; }
+th { background: var(--surface-2); font-weight: 600; font-size: .85rem; color: var(--muted); }
+tr:last-child td { border-bottom: 0; }
+td code { white-space: nowrap; }
+.code-tag { font-family: var(--mono); font-size: .82rem; font-weight: 650; padding: 2px 8px; border-radius: 6px; white-space: nowrap; display: inline-block; }
+.tag-bad { background: var(--bad-soft); color: var(--bad); }
+.tag-warn { background: var(--warn-soft); color: var(--warn); }
+.tag-ok { background: var(--ok-soft); color: var(--ok); }
+
+.callout { border-radius: 10px; padding: 12px 16px; margin: 14px 0; border: 1px solid var(--border); background: var(--surface); max-width: 880px; }
+.callout.info { border-left: 4px solid var(--accent); }
+.callout.warn { border-left: 4px solid var(--warn); background: var(--warn-soft); }
+.callout.ok { border-left: 4px solid var(--ok); background: var(--ok-soft); }
+.callout p { margin: 4px 0; }
+.callout strong:first-child { display: block; margin-bottom: 2px; }
+
+.tabs { margin: 14px 0 6px; }
+.tablist { display: inline-flex; gap: 4px; background: var(--surface-2); padding: 4px; border-radius: 10px; flex-wrap: wrap; }
+.tablist button { border: 0; background: transparent; color: var(--muted); padding: 6px 12px; border-radius: 7px; cursor: pointer; font: inherit; font-size: .9rem; }
+.tablist button[aria-selected="true"] { background: var(--surface); color: var(--text); box-shadow: var(--shadow); font-weight: 600; }
+
+ol.steps { list-style: none; counter-reset: step; padding: 0; margin: 10px 0; max-width: 900px; }
+ol.steps > li { counter-increment: step; position: relative; padding: 0 0 18px 44px; }
+ol.steps > li::before { content: counter(step); position: absolute; left: 0; top: 0; width: 28px; height: 28px; border-radius: 50%;
+  background: var(--accent-soft); color: var(--accent); font-weight: 700; font-size: .85rem; display: grid; place-items: center; }
+ol.steps > li > p:first-child { margin-top: 2px; }
+.step-title { font-weight: 600; }
+
+.code { position: relative; margin: 8px 0 10px; max-width: 900px; }
+.code pre { margin: 0; background: var(--code-bg); border: 1px solid var(--border); border-radius: 10px; padding: 12px 52px 12px 14px;
+  overflow-x: auto; line-height: 1.5; white-space: pre; }
+.copy { position: absolute; top: 7px; right: 7px; border: 1px solid var(--border); background: var(--surface); color: var(--muted);
+  border-radius: 6px; padding: 3px 8px; font: 12px var(--sans); cursor: pointer; }
+.copy:hover { color: var(--text); }
+.expect { font-size: .9rem; color: var(--muted); margin: 4px 0 0; }
+.expect b { color: var(--ok); font-weight: 600; }
+
+.os-only[hidden] { display: none; }
+.split { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+/* Grid items may shrink below their longest command line; the code block scrolls instead of the page. */
+.split > *, .three > *, .audience > *, .status > * { min-width: 0; }
+@media (max-width: 860px) { .split { grid-template-columns: 1fr; } }
+
+details { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 0 16px; margin: 8px 0; max-width: 900px; }
+details[open] { padding-bottom: 10px; }
+summary { cursor: pointer; padding: 12px 0; font-weight: 600; }
+details p { margin: 6px 0; }
+
+.status { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
+.status .card { padding: 12px 14px; }
+.status .card p { font-size: .88rem; }
+footer { border-top: 1px solid var(--border); margin-top: 64px; padding: 24px 16px; color: var(--muted); font-size: .9rem; text-align: center; }
+
+@media (max-width: 640px) {
+  .theme-btn span { display: none; }
+  ol.steps > li { padding-left: 38px; }
+  th, td { padding: 8px 10px; }
+}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="top-inner">
+    <a class="brand" href="#top" aria-label="Chain of Custody home">
+      <svg width="26" height="26" viewBox="0 0 32 32" aria-hidden="true"><rect x="3" y="9" width="14" height="14" rx="7" fill="none" stroke="currentColor" stroke-width="3"/><rect x="15" y="9" width="14" height="14" rx="7" fill="none" stroke="var(--accent)" stroke-width="3"/></svg>
+      Chain of Custody
+    </a>
+    <nav aria-label="Sections">
+      <a href="#how">How it works</a>
+      <a href="#setup">Setup</a>
+      <a href="#demo">Demo</a>
+      <a href="#integrate">Integrate</a>
+      <a href="#trouble">Troubleshooting</a>
+      <a href="#reference">Reference</a>
+    </nav>
+    <button class="theme-btn" id="themeBtn" type="button" aria-label="Toggle light or dark theme">◐ <span>Theme</span></button>
+  </div>
+</header>
+
+<main id="top">
+  <div class="hero">
+    <div class="eyebrow">Hackurity 2026 · Problem statement 6</div>
+    <h1>Tamper-evident logs for any platform</h1>
+    <p class="lede">Chain of Custody sits next to an existing platform, chains every event it records, and pins the chain on a second machine the attacker cannot touch. If an admin edits, deletes, reorders or truncates the logs, the verifier says so and names the attack.</p>
+    <div class="pills">
+      <span class="pill"><b>Docker only</b>: no Python install</span>
+      <span class="pill"><b>Windows, macOS, Linux</b> (Intel and Apple silicon)</span>
+      <span class="pill"><b>Same code</b>, one profile per platform</span>
+    </div>
+    <div class="audience">
+      <a class="card" href="#setup"><h3>Setting up a laptop →</h3><p>Witness laptop and platform laptop, step by step, in about 15 minutes.</p></a>
+      <a class="card" href="#demo"><h3>Running the demo →</h3><p>Four attacks, live, with the verdict each one produces.</p></a>
+      <a class="card" href="#integrate"><h3>Plugging in a platform →</h3><p>The profile, the event format and the spool rules.</p></a>
+    </div>
+  </div>
+
+  <!-- ============================================================ HOW -->
+  <section id="how">
+    <h2>How it works</h2>
+    <p class="sub">Three parts. The sidecar and verifier run beside the platform; the witness runs on a different laptop.</p>
+
+    <div class="three">
+      <div class="card"><div class="n">1</div><h3>Chain</h3><p>The sidecar reads each event the platform records (from a spool file) and links it to the previous one with SHA-256. Change one byte of an old event and every later link breaks.</p></div>
+      <div class="card"><div class="n">2</div><h3>Pin</h3><p>Every 30 seconds it sends a signed heartbeat (Ed25519) with the newest entry's hash to the witness, plus signed Merkle checkpoints. The witness only ever appends.</p></div>
+      <div class="card"><div class="n">3</div><h3>Verify</h3><p>The verifier recomputes the chain and compares it with what the witness saw. It prints one JSON verdict list: clean, or which attack happened and where.</p></div>
+    </div>
+
+    <div class="diagram" role="img" aria-label="Diagram: the platform writes events to a spool file; the sidecar chains them and sends heartbeats and checkpoints to the witness on a second laptop; the verifier compares the sidecar's log with the witness.">
+      <svg viewBox="0 0 960 330" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="arrowhead"/></marker>
+        </defs>
+        <rect class="z-a" x="10" y="10" width="610" height="310" rx="14"/>
+        <text class="t-zone" x="28" y="36">Platform laptop · attacker may be admin here</text>
+        <rect class="z-b" x="650" y="10" width="300" height="310" rx="14"/>
+        <text class="t-zone" x="668" y="36">Witness laptop · out of reach</text>
+
+        <rect class="box" x="30" y="62" width="160" height="104" rx="10"/>
+        <text class="t-head" x="46" y="88">Platform</text>
+        <text class="t-muted" x="46" y="110">app, database,</text>
+        <text class="t-muted" x="46" y="126">web server log</text>
+        <text class="t-muted" x="46" y="150">unchanged</text>
+
+        <rect class="box" x="30" y="206" width="160" height="80" rx="10"/>
+        <text class="t-head" x="46" y="232">Spool file</text>
+        <text class="t-muted" x="46" y="254">events.jsonl</text>
+        <text class="t-muted" x="46" y="270">append-only</text>
+
+        <rect class="box-key" x="250" y="62" width="200" height="140" rx="10"/>
+        <text class="t-head" x="266" y="88">Sidecar</text>
+        <text class="t-muted" x="266" y="110">SHA-256 hash chain</text>
+        <text class="t-muted" x="266" y="128">Merkle checkpoints</text>
+        <text class="t-muted" x="266" y="146">Ed25519 signatures</text>
+        <text class="t-muted" x="266" y="172">data/sidecar.db</text>
+
+        <rect class="box" x="250" y="230" width="200" height="66" rx="10"/>
+        <text class="t-head" x="266" y="256">Verifier</text>
+        <text class="t-muted" x="266" y="278">coc verify → verdict JSON</text>
+
+        <rect class="box-key" x="690" y="62" width="230" height="140" rx="10"/>
+        <text class="t-head" x="706" y="88">Witness</text>
+        <text class="t-muted" x="706" y="110">checks signatures, counters</text>
+        <text class="t-muted" x="706" y="128">raises FORK, ROLLBACK,</text>
+        <text class="t-muted" x="706" y="146">SILENCE on its own clock</text>
+        <text class="t-muted" x="706" y="172">insert-only store</text>
+
+        <path class="flow" d="M110,166 L110,204" marker-end="url(#ah)"/>
+        <text class="t-muted" x="118" y="190">writes</text>
+        <path class="flow" d="M190,246 C220,246 225,150 248,140" marker-end="url(#ah)"/>
+        <text class="t-muted" x="198" y="272">reads</text>
+        <path class="flow" d="M450,110 L688,110" marker-end="url(#ah)"/>
+        <text class="t-muted" x="490" y="100">heartbeat every 30 s + checkpoints</text>
+        <path class="flow" d="M350,204 L350,228" marker-end="url(#ah)"/>
+        <path class="flow-dash" d="M688,170 C600,170 560,262 452,262" marker-end="url(#ah)"/>
+        <text class="t-muted" x="470" y="300">verifier asks the witness</text>
+      </svg>
+    </div>
+
+    <h3>What the verifier tells you</h3>
+    <p>Exit code <code>0</code> = clean, <code>1</code> = tampering found, <code>2</code> = the check itself failed (never a false "clean").</p>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Verdict</th><th>What the attacker did</th><th>Needs the witness?</th></tr></thead>
+      <tbody>
+        <tr><td><span class="code-tag tag-bad">EDIT</span></td><td>Changed a field of a stored entry (or swapped two entries)</td><td>No</td></tr>
+        <tr><td><span class="code-tag tag-bad">CHAIN_BREAK</span></td><td>An entry no longer points at the one before it</td><td>No</td></tr>
+        <tr><td><span class="code-tag tag-bad">SEQ_GAP</span></td><td>Deleted entries from the middle (the missing range is reported)</td><td>No</td></tr>
+        <tr><td><span class="code-tag tag-bad">CHECKPOINT_MISMATCH</span></td><td>Rewrote and re-chained history that a signed checkpoint already covered</td><td>No</td></tr>
+        <tr><td><span class="code-tag tag-bad">BAD_CHECKPOINT_SIGNATURE</span></td><td>Forged or altered a checkpoint</td><td>No</td></tr>
+        <tr><td><span class="code-tag tag-bad">TRUNCATION</span></td><td>Deleted the newest entries</td><td>Yes</td></tr>
+        <tr><td><span class="code-tag tag-bad">FORK</span></td><td>Rewrote the whole chain, even re-signed with the stolen local key</td><td>Yes</td></tr>
+        <tr><td><span class="code-tag tag-warn">SILENCE</span></td><td>Stopped the sidecar or cut it off: no heartbeat for over 75 s</td><td>Yes</td></tr>
+      </tbody>
+    </table></div>
+
+    <h3>What we assume, and the limits</h3>
+    <div class="split">
+      <div class="callout info">
+        <strong>Trust model</strong>
+        <p>The attacker is admin on the platform laptop: they can edit the sidecar database, the spool file and read the node's private key.</p>
+        <p>They cannot touch the witness laptop. That is why the witness catches a full rewrite even when it is re-signed with the stolen key.</p>
+      </div>
+      <div class="callout warn">
+        <strong>Limits, stated plainly</strong>
+        <p>The defence proves logs were not changed <em>after</em> they were recorded. It cannot prove the platform told the truth in the first place.</p>
+        <p>The newest ~32 s of events (one heartbeat interval plus the send timeout) are not yet pinned and can be removed without a witness verdict.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ SETUP -->
+  <section id="setup">
+    <h2>Setup: two laptops</h2>
+    <p class="sub">Each laptop needs Docker and two small files from the repo. No clone, no Python. The images download themselves from GitHub Container Registry.</p>
+
+    <div class="tabs" data-os-tabs>
+      <div class="tablist" role="tablist" aria-label="Operating system">
+        <button type="button" role="tab" data-os="win" aria-selected="true">Windows (PowerShell)</button>
+        <button type="button" role="tab" data-os="nix" aria-selected="false">macOS / Linux</button>
+      </div>
+    </div>
+
+    <h3>0. Before you start (both laptops)</h3>
+    <ol class="steps">
+      <li><p class="step-title">Install Docker Desktop and start it.</p>
+        <p>From <a href="https://www.docker.com/products/docker-desktop/">docker.com</a>, default options. Wait for "Engine running", then check:</p>
+        <div class="code"><pre>docker run --rm hello-world</pre></div>
+        <p class="expect">Expected: <b>Hello from Docker!</b> (on Linux, Docker Engine works too.)</p></li>
+      <li><p class="step-title">Put both laptops on the same Wi-Fi or hotspot.</p>
+        <p>Keep the clocks on automatic time. Clock drift causes false alarms.</p></li>
+      <li><p class="step-title">Work in a folder outside OneDrive, Dropbox or iCloud.</p>
+        <p>The platform laptop keeps a private key and a live database there; a sync client would upload the key and can lock the database.</p></li>
+    </ol>
+
+    <div class="split">
+    <div>
+    <h3>1. Witness laptop</h3>
+    <ol class="steps">
+      <li><p class="step-title">Make a folder and download two files.</p>
+        <div class="os-only" data-os="win"><div class="code"><pre>mkdir C:\coc-witness; cd C:\coc-witness
+$base = "https://raw.githubusercontent.com/JeevikaS-19/cybersec_hackathon/main/chain-of-custody"
+Invoke-WebRequest -UseBasicParsing "$base/witness-compose.yml" -OutFile witness-compose.yml
+Invoke-WebRequest -UseBasicParsing "$base/coc.ps1" -OutFile coc.ps1
+Set-ExecutionPolicy -Scope Process Bypass</pre></div>
+          <p class="expect">The last line lets this PowerShell window run <code>coc.ps1</code>. No admin needed; it ends when you close the window.</p></div>
+        <div class="os-only" data-os="nix" hidden><div class="code"><pre>mkdir -p ~/coc-witness && cd ~/coc-witness
+base=https://raw.githubusercontent.com/JeevikaS-19/cybersec_hackathon/main/chain-of-custody
+curl -fsSL -O "$base/witness-compose.yml" -O "$base/coc.sh"
+chmod +x coc.sh</pre></div></div></li>
+      <li><p class="step-title">Trust the platform laptop's key.</p>
+        <p>Use the exact <code>coc trust</code> line that <code>coc init</code> printed on the platform laptop (step 2.1).</p>
+        <div class="os-only" data-os="win"><div class="code"><pre>.\coc.ps1 trust node-1 &lt;64-character public key&gt;</pre></div></div>
+        <div class="os-only" data-os="nix" hidden><div class="code"><pre>./coc.sh trust node-1 &lt;64-character public key&gt;</pre></div></div>
+        <p class="expect">Expected: <b>[CREATED] witness_nodes.toml: node-1 is trusted</b></p></li>
+      <li><p class="step-title">Start the witness.</p>
+        <div class="code"><pre>docker compose -f witness-compose.yml up -d</pre></div>
+        <p class="expect">Check with <code>docker logs chain-of-custody-witness</code>: <b>SILENCE after 75.0s without a heartbeat</b>, then "Uvicorn running".</p></li>
+      <li><p class="step-title">Open port 8800 and note this laptop's IP.</p>
+        <div class="os-only" data-os="win"><div class="code"><pre># In PowerShell "Run as administrator":
+New-NetFirewallRule -DisplayName "Chain of Custody witness" -Direction Inbound -Protocol TCP -LocalPort 8800 -Action Allow
+ipconfig   # IPv4 Address of the Wi-Fi adapter</pre></div></div>
+        <div class="os-only" data-os="nix" hidden><div class="code"><pre>ipconfig getifaddr en0      # macOS
+hostname -I                 # Linux (open 8800 in ufw/firewalld if enabled)</pre></div></div></li>
+    </ol>
+    </div>
+
+    <div>
+    <h3>2. Platform laptop</h3>
+    <ol class="steps">
+      <li><p class="step-title">Make a folder, download two files, run <code>coc init</code>.</p>
+        <p>Replace <code>WITNESS-IP</code> with the witness laptop's address.</p>
+        <div class="os-only" data-os="win"><div class="code"><pre>mkdir C:\coc-platform; cd C:\coc-platform
+$base = "https://raw.githubusercontent.com/JeevikaS-19/cybersec_hackathon/main/chain-of-custody"
+Invoke-WebRequest -UseBasicParsing "$base/sidecar-compose.yml" -OutFile sidecar-compose.yml
+Invoke-WebRequest -UseBasicParsing "$base/coc.ps1" -OutFile coc.ps1
+Set-ExecutionPolicy -Scope Process Bypass
+.\coc.ps1 init --witness-url http://WITNESS-IP:8800</pre></div></div>
+        <div class="os-only" data-os="nix" hidden><div class="code"><pre>mkdir -p ~/coc-platform && cd ~/coc-platform
+base=https://raw.githubusercontent.com/JeevikaS-19/cybersec_hackathon/main/chain-of-custody
+curl -fsSL -O "$base/sidecar-compose.yml" -O "$base/coc.sh"
+chmod +x coc.sh
+./coc.sh init --witness-url http://WITNESS-IP:8800</pre></div></div>
+        <p class="expect">It creates <code>config.toml</code>, the key pair in <code>data/</code>, and prints <b>coc trust node-1 …</b>. Send that line to the witness laptop (step 1.2).</p></li>
+      <li><p class="step-title">Start the sidecar.</p>
+        <div class="code"><pre>docker compose -f sidecar-compose.yml up -d</pre></div>
+        <p>The platform writes its events to <code>spool/events.jsonl</code> in this folder (or set <code>SPOOL_DIR</code> to its spool folder before <code>up</code>).</p></li>
+      <li><p class="step-title">Check everything.</p>
+        <div class="os-only" data-os="win"><div class="code"><pre>.\coc.ps1 check</pre></div></div>
+        <div class="os-only" data-os="nix" hidden><div class="code"><pre>./coc.sh check</pre></div></div>
+        <p class="expect">One line per layer. <b>PASS</b> everywhere, or <b>WARN</b> for an empty spool or before the first heartbeat (30 s). Exit 0. Nothing is changed by a check.</p></li>
+      <li><p class="step-title">Verify the log.</p>
+        <div class="os-only" data-os="win"><div class="code"><pre>.\coc.ps1 verify --witness http://WITNESS-IP:8800 --node-id node-1</pre></div></div>
+        <div class="os-only" data-os="nix" hidden><div class="code"><pre>./coc.sh verify --witness http://WITNESS-IP:8800 --node-id node-1</pre></div></div>
+        <p class="expect">Expected: <b>{"clean": true, "checked_entries": N, "verdicts": []}</b></p></li>
+    </ol>
+    </div>
+    </div>
+
+    <details>
+      <summary>Rehearse on one laptop first</summary>
+      <p>Do steps 1 and 2 in two different folders on the same laptop, and use <code>--witness-url http://localhost:8800</code>. Inside the containers, <code>localhost</code> is translated to the host machine automatically (<code>coc check</code> prints a NOTE saying so), so this works exactly like two laptops.</p>
+    </details>
+    <details>
+      <summary>No platform yet? Generate test events</summary>
+      <p>On the platform laptop, this writes 200 realistic events into the spool, the way a platform would:</p>
+      <div class="os-only" data-os="win"><div class="code"><pre>docker run --rm -v "${PWD}:/work" -w /work ghcr.io/jeevikas-19/coc-sidecar:latest python -P -m tools.gen_events --config config.toml --count 200 --rate 20</pre></div></div>
+      <div class="os-only" data-os="nix" hidden><div class="code"><pre>docker run --rm --user "$(id -u):$(id -g)" -v "$PWD":/work -w /work ghcr.io/jeevikas-19/coc-sidecar:latest python -P -m tools.gen_events --config config.toml --count 200 --rate 20</pre></div></div>
+    </details>
+  </section>
+
+  <!-- ============================================================ DEMO -->
+  <section id="demo">
+    <h2>Demo script</h2>
+    <p class="sub">Run on the platform laptop after setup, with 200 test events in and a clean verify. Each attack is what an admin with database access could do; each verify adds the new verdict. Wait 45 s after the events go in so a heartbeat has pinned them.</p>
+
+    <div class="callout info"><strong>Shortcut</strong><p>The commands below are for Windows. On macOS/Linux, replace <code>.\coc.ps1</code> with <code>./coc.sh</code> and <code>"${PWD}:/work"</code> with <code>"$PWD":/work</code>.</p></div>
+
+    <ol class="steps">
+      <li><p class="step-title">Baseline: clean.</p>
+        <div class="code"><pre>.\coc.ps1 verify --witness http://WITNESS-IP:8800 --node-id node-1</pre></div>
+        <p class="expect"><span class="code-tag tag-ok">clean: true</span> 200 entries, exit 0.</p></li>
+      <li><p class="step-title">Attack 1: quietly change who did something (entry 42).</p>
+        <div class="code"><pre>docker run --rm -v "${PWD}:/work" -w /work ghcr.io/jeevikas-19/coc-sidecar:latest python -c "import sqlite3; c = sqlite3.connect('data/sidecar.db'); c.execute('UPDATE entries SET actor = ? WHERE seq = 42', ('mallory',)); c.commit()"</pre></div>
+        <p class="expect">Verify again: <span class="code-tag tag-bad">EDIT</span> at seq 42, exit 1.</p></li>
+      <li><p class="step-title">Attack 2: delete an embarrassing entry (entry 120).</p>
+        <div class="code"><pre>docker run --rm -v "${PWD}:/work" -w /work ghcr.io/jeevikas-19/coc-sidecar:latest python -c "import sqlite3; c = sqlite3.connect('data/sidecar.db'); c.execute('DELETE FROM entries WHERE seq = 120'); c.commit()"</pre></div>
+        <p class="expect">Verify again: adds <span class="code-tag tag-bad">SEQ_GAP</span> at 120 (the hole), plus the broken link and the checkpoint that no longer matches.</p></li>
+      <li><p class="step-title">Attack 3: cut off the newest events (190 onward).</p>
+        <div class="code"><pre>docker run --rm -v "${PWD}:/work" -w /work ghcr.io/jeevikas-19/coc-sidecar:latest python -c "import sqlite3; c = sqlite3.connect('data/sidecar.db'); c.execute('DELETE FROM entries WHERE seq &gt;= 190'); c.commit()"</pre></div>
+        <p class="expect">Wait 35 s for the next heartbeat, verify again: adds <span class="code-tag tag-bad">TRUNCATION</span>. Locally the tail looks fine; only the witness knows there were 200.</p></li>
+      <li><p class="step-title">Attack 4: switch the logging off.</p>
+        <div class="code"><pre>docker compose -f sidecar-compose.yml stop sidecar</pre></div>
+        <p class="expect">Wait 2 minutes, verify again: adds <span class="code-tag tag-warn">SILENCE</span>. Then <code>docker compose -f sidecar-compose.yml start sidecar</code>.</p></li>
+    </ol>
+
+    <details>
+      <summary>Reset after the demo</summary>
+      <p>The witness remembers every alert (that is the point), so a fresh start clears both sides. The keys stay, so no new <code>coc trust</code> is needed.</p>
+      <div class="code"><pre># platform laptop
+docker compose -f sidecar-compose.yml down
+Remove-Item data\sidecar.db*, spool\events.jsonl     # macOS/Linux: rm data/sidecar.db* spool/events.jsonl
+# witness laptop
+docker compose -f witness-compose.yml down -v
+docker compose -f witness-compose.yml up -d</pre></div>
+    </details>
+    <details>
+      <summary>The full-rewrite attack (FORK)</summary>
+      <p>Rewriting the whole chain and re-signing it with the stolen key is covered by the automated self-test, which runs five attacks plus a clean baseline. From a clone of the repo: <code>python -m tests.test_tampering</code>.</p>
+      <div class="code"><pre>| Clean baseline      | CLEAN      | CLEAN      | PASS |
+| Edit in place       | EDIT       | EDIT       | PASS |
+| Delete in middle    | SEQ_GAP    | SEQ_GAP    | PASS |
+| Truncate tail       | TRUNCATION | TRUNCATION | PASS |
+| Reorder two entries | EDIT       | EDIT       | PASS |
+| Fork and rewrite    | FORK       | FORK       | PASS |</pre></div>
+    </details>
+  </section>
+
+  <!-- ============================================================ INTEGRATE -->
+  <section id="integrate">
+    <h2>Plug in a platform</h2>
+    <p class="sub">Protecting a new platform means writing a profile, never changing the defence code. The interface is <a href="https://github.com/JeevikaS-19/cybersec_hackathon/blob/main/chain-of-custody/docs/CONTRACT.md">CONTRACT.md</a>; this is the short version.</p>
+
+    <h3>The event format (one JSON object per line in the spool)</h3>
+    <div class="code"><pre>{"source": "app", "ts": "2026-10-12T09:15:30Z", "actor": "asha", "event_type": "login_success", "details": {"ip": "10.0.0.5"}}</pre></div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Field</th><th>Rule</th></tr></thead>
+      <tbody>
+        <tr><td><code>source</code></td><td><code>app</code>, <code>db</code> or <code>host</code></td></tr>
+        <tr><td><code>ts</code></td><td>UTC, seconds, trailing Z: <code>2026-10-12T09:15:30Z</code></td></tr>
+        <tr><td><code>actor</code></td><td>user or account name, <code>unknown</code> if none</td></tr>
+        <tr><td><code>event_type</code></td><td>snake_case, e.g. <code>transaction_created</code>; optionally limited by the profile's allow-list</td></tr>
+        <tr><td><code>details</code></td><td>small object; <strong>no floats anywhere</strong> (money as a string), no passwords or tokens</td></tr>
+      </tbody>
+    </table></div>
+    <p>The spool is append-only, one writer, one line per write, <code>\n</code> line endings. Anything that breaks a rule is rejected, never silently accepted. Check a spool before going live:</p>
+    <div class="code"><pre>docker run --rm -v "${PWD}:/work" -w /work ghcr.io/jeevikas-19/coc-sidecar:latest python -P -m tools.validate_spool spool/events.jsonl --config config.toml</pre></div>
+
+    <h3>The profile (<code>config.toml</code>, written by <code>coc init</code>)</h3>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Section</th><th>Keys</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td><code>[profile]</code></td><td><code>name</code>, <code>event_types</code></td><td>Label for humans; optional allow-list (empty = any snake_case name)</td></tr>
+        <tr><td><code>[node]</code></td><td><code>node_id</code></td><td>Letters, digits, <code>. _ -</code>, up to 64; must match what the witness trusts</td></tr>
+        <tr><td><code>[paths]</code></td><td><code>spool_path</code>, <code>db_path</code>, key paths</td><td>Keep relative, under <code>spool/</code> and <code>data/</code></td></tr>
+        <tr><td><code>[checkpoint]</code></td><td><code>every_n</code>, <code>every_s</code></td><td>Signed checkpoint every 50 entries or 60 s</td></tr>
+        <tr><td><code>[heartbeat]</code></td><td><code>interval_s</code>, <code>witness_url</code></td><td>30 s; the witness laptop's address. Witness <code>COC_INTERVAL_S</code> must match</td></tr>
+      </tbody>
+    </table></div>
+    <p>Unknown keys and wrong types are errors with the key path (<code>heartbeat.intervl_s: unknown key</code>), so a typo never goes unnoticed. <code>coc check</code> reports them.</p>
+
+    <h3>Status</h3>
+    <div class="status">
+      <div class="card"><span class="code-tag tag-ok">built</span><h3>Core defence</h3><p>Chain, checkpoints, witness, verifier, self-test (D0–D10), each step red-teamed.</p></div>
+      <div class="card"><span class="code-tag tag-ok">built</span><h3>Setup tooling</h3><p><code>coc init / check / trust / verify</code>, published images, two-laptop compose (I1, I2).</p></div>
+      <div class="card"><span class="code-tag tag-warn">next</span><h3>Collectors</h3><p>Read a PostgreSQL audit table and the nginx access log straight from the profile, so platforms write no code (I3).</p></div>
+      <div class="card"><span class="code-tag tag-warn">next</span><h3>Attack harness</h3><p>The hacker team's attacks run against the integrated system; every one that gets through is logged with a fix (I4).</p></div>
+    </div>
+  </section>
+
+  <!-- ============================================================ TROUBLE -->
+  <section id="trouble">
+    <h2>Troubleshooting</h2>
+    <p class="sub">Every one of these happened to us at least once.</p>
+
+    <details><summary>"running scripts is disabled on this system" (Windows)</summary>
+      <p>Windows blocks <code>.ps1</code> files by default, and downloaded ones even more. Run <code>Set-ExecutionPolicy -Scope Process Bypass</code> in that PowerShell window first. It needs no admin and resets when the window closes.</p></details>
+    <details><summary>Docker Desktop will not start</summary>
+      <p>"Virtualization not enabled": Task Manager → Performance → CPU must show Virtualization: Enabled; if not, turn on Intel VT-x / AMD SVM in the BIOS.</p>
+      <p>"WSL 2 is not installed": in an admin PowerShell run <code>wsl --install</code>, then restart.</p></details>
+    <details><summary><code>coc check</code>: FAIL witness unreachable</summary>
+      <p>Work through the checklist it prints: the witness laptop's IP and port, port 8800 open in its firewall, both laptops on the same network, the witness container running (<code>docker ps</code> on the witness laptop). From the platform laptop, <code>Test-NetConnection WITNESS-IP -Port 8800</code> (Windows) or <code>curl http://WITNESS-IP:8800/heartbeats?node_id=node-1</code> should answer.</p></details>
+    <details><summary>WARN reachable, but no heartbeats yet</summary>
+      <p>Normal for the first 30 s after <code>up</code>. If it stays: the witness does not trust this node. Run the <code>coc trust</code> line from <code>coc init</code> on the witness laptop, then <code>docker compose -f witness-compose.yml restart witness</code>.</p></details>
+    <details><summary>The witness exits: "nodes_file … is a directory"</summary>
+      <p>Docker created a folder because <code>witness_nodes.toml</code> did not exist when the witness started. Delete the folder, run <code>coc trust</code>, start again.</p></details>
+    <details><summary>The witness exits: TOML or "byte-order mark" error</summary>
+      <p>The trust file was edited in Notepad and saved as "UTF-8 with BOM". Delete it and recreate it with <code>coc trust</code>.</p></details>
+    <details><summary>Verify says SILENCE, but nothing was attacked</summary>
+      <p>The sidecar was stopped for over 75 s, or the laptop slept, or the network dropped. The witness records it and keeps it: that is correct. For a fresh demo, use the reset in the demo section.</p>
+      <p>If it happens constantly: the witness <code>COC_INTERVAL_S</code> differs from the profile's <code>interval_s</code>. They must be equal.</p></details>
+    <details><summary>Two commands pasted on one line</summary>
+      <p>Pasting <code>verify</code> and <code>echo</code> together makes the second an argument of the first ("unrecognized arguments"). Run one command per line.</p></details>
+    <details><summary><code>coc init</code> says a different key is trusted for this node</summary>
+      <p>The trust file already holds an older key for that node id. Deliberate reset: <code>coc init --force</code> (refused while a sidecar database exists) or <code>coc trust … --replace</code> on the witness laptop.</p></details>
+  </section>
+
+  <!-- ============================================================ REFERENCE -->
+  <section id="reference">
+    <h2>Reference</h2>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Command</th><th>Where</th><th>What it does</th></tr></thead>
+      <tbody>
+        <tr><td><code>coc init [--node-id] [--spool] [--witness-url] [--force]</code></td><td>Platform</td><td>Writes the profile, key pair and trust entry; prints the <code>coc trust</code> line. Run twice, nothing changes; never overwrites <code>config.toml</code>.</td></tr>
+        <tr><td><code>coc check</code></td><td>Platform</td><td>Profile, paths and keys, spool format, witness. PASS / WARN / FAIL per layer; read-only.</td></tr>
+        <tr><td><code>coc trust NODE KEY [--replace]</code></td><td>Witness</td><td>Adds a node's public key to <code>witness_nodes.toml</code>.</td></tr>
+        <tr><td><code>coc verify [--witness URL] [--node-id ID]</code></td><td>Platform</td><td>The verifier: verdict JSON, exit 0 / 1 / 2.</td></tr>
+      </tbody>
+    </table></div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Setting</th><th>Default</th><th>Use</th></tr></thead>
+      <tbody>
+        <tr><td><code>COC_TAG</code></td><td><code>latest</code></td><td>Pin images, e.g. <code>sha-9e376dd</code> (compose files)</td></tr>
+        <tr><td><code>COC_IMAGE_PREFIX</code></td><td><code>ghcr.io/jeevikas-19</code></td><td>A fork's own registry (compose files)</td></tr>
+        <tr><td><code>COC_IMAGE</code></td><td><code>…/coc-sidecar:latest</code></td><td>Image the <code>coc</code> wrapper runs</td></tr>
+        <tr><td><code>SPOOL_DIR</code></td><td><code>./spool</code></td><td>The platform's spool folder (sidecar, mounted read-only)</td></tr>
+        <tr><td><code>COC_INTERVAL_S</code></td><td><code>30</code></td><td>Witness: must equal the profile's <code>interval_s</code></td></tr>
+        <tr><td><code>COC_WITNESS_PORT</code></td><td><code>8800</code></td><td>Witness: port on the laptop</td></tr>
+      </tbody>
+    </table></div>
+    <p>Source, contract and red-team reports: <a href="https://github.com/JeevikaS-19/cybersec_hackathon/tree/main/chain-of-custody">github.com/JeevikaS-19/cybersec_hackathon</a>.</p>
+  </section>
+</main>
+
+<footer>Chain of Custody · Hackurity 2026 · base model · <a href="https://github.com/JeevikaS-19/cybersec_hackathon">source on GitHub</a></footer>
+
+<script>
+(function () {
+  function store(key, value) {
+    try { if (value === undefined) return localStorage.getItem(key); localStorage.setItem(key, value); } catch (e) { return null; }
+  }
+  // Theme toggle (follows the system until the viewer picks one).
+  var root = document.documentElement;
+  var saved = store("coc-theme");
+  if (saved === "light" || saved === "dark") root.setAttribute("data-theme", saved);
+  document.getElementById("themeBtn").addEventListener("click", function () {
+    var dark = root.getAttribute("data-theme") === "dark" ||
+      (!root.getAttribute("data-theme") && window.matchMedia("(prefers-color-scheme: dark)").matches);
+    var next = dark ? "light" : "dark";
+    root.setAttribute("data-theme", next);
+    store("coc-theme", next);
+  });
+
+  // OS tabs: one choice switches every OS-specific block on the page.
+  function setOs(os) {
+    document.querySelectorAll("[data-os-tabs] button").forEach(function (b) {
+      b.setAttribute("aria-selected", b.getAttribute("data-os") === os ? "true" : "false");
+    });
+    document.querySelectorAll(".os-only").forEach(function (el) { el.hidden = el.getAttribute("data-os") !== os; });
+    store("coc-os", os);
+  }
+  document.querySelectorAll("[data-os-tabs] button").forEach(function (b) {
+    b.addEventListener("click", function () { setOs(b.getAttribute("data-os")); });
+  });
+  var os = store("coc-os") || (/Mac|Linux/i.test(navigator.platform || "") ? "nix" : "win");
+  setOs(os === "nix" ? "nix" : "win");
+
+  // Copy buttons on every code block.
+  document.querySelectorAll(".code").forEach(function (block) {
+    var btn = document.createElement("button");
+    btn.className = "copy"; btn.type = "button"; btn.textContent = "Copy";
+    btn.addEventListener("click", function () {
+      var text = block.querySelector("pre").innerText;
+      var done = function () { btn.textContent = "Copied"; setTimeout(function () { btn.textContent = "Copy"; }, 1400); };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done, function () { fallback(text); done(); });
+      } else { fallback(text); done(); }
+    });
+    block.appendChild(btn);
+  });
+  function fallback(text) {
+    var ta = document.createElement("textarea"); ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
+    document.body.appendChild(ta); ta.select(); try { document.execCommand("copy"); } catch (e) {} document.body.removeChild(ta);
+  }
+
+  // Highlight the section in view in the top nav.
+  var links = Array.prototype.slice.call(document.querySelectorAll(".top nav a"));
+  if ("IntersectionObserver" in window) {
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        if (!e.isIntersecting) return;
+        links.forEach(function (a) { a.classList.toggle("active", a.getAttribute("href") === "#" + e.target.id); });
+      });
+    }, { rootMargin: "-40% 0px -55% 0px" });
+    document.querySelectorAll("main section[id]").forEach(function (s) { io.observe(s); });
+  }
+})();
+</script>
+</body>
+</html>

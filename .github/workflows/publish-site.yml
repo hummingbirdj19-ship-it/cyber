@@ -1,0 +1,33 @@
+# Publish the setup guide (chain-of-custody/site) to GitHub Pages.
+# One-time: repo Settings > Pages > Build and deployment > Source: "GitHub Actions".
+name: publish-site
+
+on:
+  push:
+    branches: [main]
+    paths: ["chain-of-custody/site/**", ".github/workflows/publish-site.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: chain-of-custody/site
+      - id: deployment
+        uses: actions/deploy-pages@v4

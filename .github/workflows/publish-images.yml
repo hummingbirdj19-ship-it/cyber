@@ -9,6 +9,7 @@ on:
     paths:
       - "chain-of-custody/**"
       - "!chain-of-custody/docs/**"
+      - "!chain-of-custody/site/**"
       - "!chain-of-custody/**/*.md"
       - ".github/workflows/publish-images.yml"
   workflow_dispatch:
