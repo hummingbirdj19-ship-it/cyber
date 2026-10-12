@@ -57,7 +57,7 @@ Keep the profile's paths relative and under `spool/` and `data/` (as in `config.
 1. Build the images: `docker compose -f defence-compose.yml build`
 2. `.\coc.ps1 init` (Windows) or `./coc.sh init` (macOS/Linux). Optional: `--node-id`, `--spool`, `--witness-url`. It writes `config.toml`, the node key pair and `data/witness_nodes.toml`, and prints the line the witness laptop needs. Run twice, it changes nothing; it never overwrites `config.toml`.
 3. `docker compose -f defence-compose.yml up -d`
-4. `.\coc.ps1 check` (or `./coc.sh check`): one PASS/WARN/FAIL line per layer, exit 0 when nothing failed. It only reads: no DB, spool or key changes, no heartbeat sent. Inside the wrapper a `localhost` witness URL is checked on the host (`host.docker.internal`).
+4. `.\coc.ps1 check` (or `./coc.sh check`): one PASS/WARN/FAIL line per layer, exit 0 when nothing failed. It only reads: no DB, spool or key changes, no heartbeat sent. It also compares the spool with what was recorded and names any line changed afterwards (`line 42 (record seq 41): actor recorded "meera", spool now "mallory"`); the record keeps the original, so `coc verify` stays clean. Inside the wrapper a `localhost` witness URL is checked on the host (`host.docker.internal`).
 5. On the host: `python -m verifier --config config.toml --witness http://localhost:8800 --node-id node-1`
 
 ### Two laptops, no clone (published images)

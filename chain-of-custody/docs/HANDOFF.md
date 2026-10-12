@@ -181,6 +181,13 @@ Red-team gate
   - His changes: dashboard escapes alert text (no injection). `SPOOL_TAMPER` is outside CONTRACT.md (needs the change protocol), `_tamper_detail` reads `details.new.amount` (bank-specific code in the defence, against AGENTS.md), and a root attacker holds the node key, so the alert explains a stop but proves nothing; SILENCE stays the real signal
 - For the meetup: (1) his test rig runs our published images and split compose files (keeping only his deploy files and the test bank's spooler), so his attacks hit the current defence; (2) decide whether `SPOOL_TAMPER` comes into our repo as a contract change, written generically; (3) rerun his attacks against the sidecar DB and judge by `coc verify`
 
+### Spool vs record (branch `spool-record-check`, 2026-10-12; from the first external test)
+- The sidecar stores which spool line each entry came from (table `spool_lines`, not hashed; chain, contract and verifier unchanged). A DB from before this counts its consumed lines once and tracks new entries; older entries are reported as untracked
+- `coc check` has a new read-only layer "spool vs record": re-reads the spool and compares every tracked line field by field with its entry. FAIL names each change (`line 5 (record seq 4): actor recorded "meera", spool now "mallory"`), counts removed lines, hints at inserted lines; later layers still run, exit 1
+- Catches edits anywhere in the spool, not only the newest line (the sidecar's own RT-07 check). The table is in the attacker-writable DB, so this explains a spool edit; the chain stays the proof
+- Checked: 16 tests (a sabotaged comparison makes them fail, including a type-only change, 1 -> true); Docker run with branch images: two spool edits named exactly, `coc verify` clean 30/30
+- Seen, not changed: after a newest-line spool edit the sidecar container restarts (`restart: unless-stopped`) and logs the same stop every ~1.5 s; the witness still raises SILENCE. Noisy, not unsafe
+
 ### Open questions
 - [x] Distribution: Docker only (pip after the hackathon, if the project continues)
 - [x] Generic collectors in the defence: yes, via CONTRACT v0.3

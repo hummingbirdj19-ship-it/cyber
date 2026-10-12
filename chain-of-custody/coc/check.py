@@ -10,9 +10,49 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 import httpx
 
 from coc.profile import load_profile
+from coc.spooldiff import compare_spool, describe
 from sidecar.heartbeat import resolve_witness_url
 from sidecar.keys import public_key_hex
 from tools.validate_spool import validate_file
+
+
+MAX_CHANGES_SHOWN = 10
+
+
+def _check_spool_vs_record(db_path: Path, spool_path: Path) -> bool:
+    """Print the spool-vs-record layer; return True if the spool changed after it was recorded."""
+    if not db_path.exists():
+        print("PASS  spool vs record: skipped (nothing recorded yet)")
+        return False
+    try:
+        report = compare_spool(db_path, spool_path)
+    except (sqlite3.Error, OSError, ValueError) as exc:
+        print(f"WARN  spool vs record: cannot compare ({type(exc).__name__}: {exc}); run 'coc verify'")
+        return False
+    if report["tracked"] == 0:
+        if report["untracked"]:
+            print(f"WARN  spool vs record: {report['untracked']} entries were recorded before line tracking; "
+                  "only newer entries can be compared")
+        else:
+            print("PASS  spool vs record: skipped (nothing recorded yet)")
+        return False
+    changed = report["changed"]
+    if not changed and not report["removed_lines"]:
+        note = f" ({report['untracked']} older entries not tracked)" if report["untracked"] else ""
+        print(f"PASS  spool vs record: all {report['tracked']} recorded lines unchanged in {spool_path}{note}")
+        return False
+    print(f"FAIL  spool vs record: {spool_path} was changed after it was recorded "
+          f"({len(changed)} line(s) differ). The record keeps the original values; "
+          "run 'coc verify' to confirm the record itself is intact")
+    for item in changed[:MAX_CHANGES_SHOWN]:
+        print(f"      {describe(item)}")
+    if len(changed) > MAX_CHANGES_SHOWN:
+        print(f"      ... and {len(changed) - MAX_CHANGES_SHOWN} more")
+    if report["removed_lines"]:
+        print(f"      {report['removed_lines']} line(s) were removed from the spool")
+    if report["hint"]:
+        print(f"      Note: {report['hint']}")
+    return True
 
 
 def _check_sqlite_ro(db_path: Path) -> str | None:
@@ -120,6 +160,11 @@ def run_check(
         print("PASS  paths: key files match and data directory is writable")
 
         # -------------------------------------------------------------
+        # Layer 2b: Spool vs record (does not stop the later layers)
+        # -------------------------------------------------------------
+        record_failed = _check_spool_vs_record(db_path, spool_path)
+
+        # -------------------------------------------------------------
         # Layer 3: Spool
         # -------------------------------------------------------------
         if spool_empty_or_missing:
@@ -184,7 +229,7 @@ def run_check(
         # -------------------------------------------------------------
         print("PASS  collectors: placeholder (no collectors configured or I3 pending)")
 
-        return 0
+        return 1 if record_failed else 0
 
     except Exception as exc:
         sys.stderr.write(f"Crash: {type(exc).__name__}: {exc}\n")

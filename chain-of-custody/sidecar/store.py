@@ -25,6 +25,12 @@ CREATE TABLE IF NOT EXISTS ingest_state (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
 );
+-- Which spool line (1-based) each entry came from. Not hashed: it only lets coc check show
+-- what changed in the spool after recording. The chain stays the proof.
+CREATE TABLE IF NOT EXISTS spool_lines (
+    seq INTEGER PRIMARY KEY,
+    line_no INTEGER NOT NULL
+);
 CREATE TABLE IF NOT EXISTS checkpoints (
     tree_size INTEGER PRIMARY KEY,
     head_seq INTEGER NOT NULL,
@@ -172,6 +178,11 @@ def insert_entry(
         "event_type": raw_event["event_type"], "details": details_obj, "prev_hash": prev_hash,
         "hash": entry_hash, "received_at": received_at,
     }
+
+
+def insert_spool_line(conn: sqlite3.Connection, seq: int, line_no: int) -> None:
+    """Remember the spool line an entry came from; the caller must hold a write_transaction."""
+    conn.execute("INSERT INTO spool_lines (seq, line_no) VALUES (?, ?)", (seq, line_no))
 
 
 def insert_checkpoint(conn: sqlite3.Connection, cp: dict[str, Any]) -> None:

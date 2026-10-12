@@ -180,7 +180,7 @@ footer { border-top: 1px solid var(--border); margin-top: 64px; padding: 24px 16
     </div>
     <div class="audience">
       <a class="card" href="#setup"><h3>Setting up a laptop →</h3><p>Witness laptop and platform laptop, step by step, in about 15 minutes.</p></a>
-      <a class="card" href="#demo"><h3>Running the demo →</h3><p>Four attacks, live, with the verdict each one produces.</p></a>
+      <a class="card" href="#demo"><h3>Running the demo →</h3><p>Five attacks, live, with the verdict each one produces.</p></a>
       <a class="card" href="#integrate"><h3>Plugging in a platform →</h3><p>The profile, the event format and the spool rules.</p></a>
     </div>
   </div>
@@ -381,7 +381,7 @@ chmod +x coc.sh
   <!-- ============================================================ DEMO -->
   <section id="demo">
     <h2>Demo script</h2>
-    <p class="sub">Run on the platform laptop after setup, with 200 test events in and a clean verify. Each attack is what an admin with database access could do; each verify adds the new verdict. Wait 45 s after the events go in so a heartbeat has pinned them.</p>
+    <p class="sub">Run on the platform laptop after setup, with 200 test events in and a clean verify. Each attack is what an admin on that laptop could do; each verify adds the new verdict. Wait 45 s after the events go in so a heartbeat has pinned them.</p>
 
     <div class="callout info"><strong>Shortcut</strong><p>The commands below are for Windows. On macOS/Linux, replace <code>.\coc.ps1</code> with <code>./coc.sh</code> and <code>"${PWD}:/work"</code> with <code>"$PWD":/work</code>.</p></div>
 
@@ -389,16 +389,21 @@ chmod +x coc.sh
       <li><p class="step-title">Baseline: clean.</p>
         <div class="code"><pre>.\coc.ps1 verify --witness http://WITNESS-IP:8800 --node-id node-1</pre></div>
         <p class="expect"><span class="code-tag tag-ok">clean: true</span> 200 entries, exit 0.</p></li>
-      <li><p class="step-title">Attack 1: quietly change who did something (entry 42).</p>
+      <li><p class="step-title">Attack 1: rewrite the raw event file (spool line 42).</p>
+        <p>The attacker edits the evidence the platform wrote, not the record.</p>
+        <div class="code"><pre>docker run --rm -v "${PWD}:/work" -w /work ghcr.io/jeevikas-19/coc-sidecar:latest python -c "import json; p = 'spool/events.jsonl'; L = open(p).read().split(chr(10)); e = json.loads(L[41]); e['actor'] = 'mallory'; L[41] = json.dumps(e); open(p, 'w').write(chr(10).join(L))"
+.\coc.ps1 check</pre></div>
+        <p class="expect"><span class="code-tag tag-bad">FAIL  spool vs record</span> <code>line 42 (record seq 41): actor recorded "…", spool now "mallory"</code>. Verify is still <span class="code-tag tag-ok">clean: true</span>: the record kept the original, which is the point.</p></li>
+      <li><p class="step-title">Attack 2: quietly change who did something in the record (entry 42).</p>
         <div class="code"><pre>docker run --rm -v "${PWD}:/work" -w /work ghcr.io/jeevikas-19/coc-sidecar:latest python -c "import sqlite3; c = sqlite3.connect('data/sidecar.db'); c.execute('UPDATE entries SET actor = ? WHERE seq = 42', ('mallory',)); c.commit()"</pre></div>
         <p class="expect">Verify again: <span class="code-tag tag-bad">EDIT</span> at seq 42, exit 1.</p></li>
-      <li><p class="step-title">Attack 2: delete an embarrassing entry (entry 120).</p>
+      <li><p class="step-title">Attack 3: delete an embarrassing entry (entry 120).</p>
         <div class="code"><pre>docker run --rm -v "${PWD}:/work" -w /work ghcr.io/jeevikas-19/coc-sidecar:latest python -c "import sqlite3; c = sqlite3.connect('data/sidecar.db'); c.execute('DELETE FROM entries WHERE seq = 120'); c.commit()"</pre></div>
         <p class="expect">Verify again: adds <span class="code-tag tag-bad">SEQ_GAP</span> at 120 (the hole), plus the broken link and the checkpoint that no longer matches.</p></li>
-      <li><p class="step-title">Attack 3: cut off the newest events (190 onward).</p>
+      <li><p class="step-title">Attack 4: cut off the newest events (190 onward).</p>
         <div class="code"><pre>docker run --rm -v "${PWD}:/work" -w /work ghcr.io/jeevikas-19/coc-sidecar:latest python -c "import sqlite3; c = sqlite3.connect('data/sidecar.db'); c.execute('DELETE FROM entries WHERE seq &gt;= 190'); c.commit()"</pre></div>
         <p class="expect">Wait 35 s for the next heartbeat, verify again: adds <span class="code-tag tag-bad">TRUNCATION</span>. Locally the tail looks fine; only the witness knows there were 200.</p></li>
-      <li><p class="step-title">Attack 4: switch the logging off.</p>
+      <li><p class="step-title">Attack 5: switch the logging off.</p>
         <div class="code"><pre>docker compose -f sidecar-compose.yml stop sidecar</pre></div>
         <p class="expect">Wait 2 minutes, verify again: adds <span class="code-tag tag-warn">SILENCE</span>. Then <code>docker compose -f sidecar-compose.yml start sidecar</code>.</p></li>
     </ol>
@@ -501,7 +506,7 @@ docker compose -f witness-compose.yml up -d</pre></div>
       <thead><tr><th>Command</th><th>Where</th><th>What it does</th></tr></thead>
       <tbody>
         <tr><td><code>coc init [--node-id] [--spool] [--witness-url] [--force]</code></td><td>Platform</td><td>Writes the profile, key pair and trust entry; prints the <code>coc trust</code> line. Run twice, nothing changes; never overwrites <code>config.toml</code>.</td></tr>
-        <tr><td><code>coc check</code></td><td>Platform</td><td>Profile, paths and keys, spool format, witness. PASS / WARN / FAIL per layer; read-only.</td></tr>
+        <tr><td><code>coc check</code></td><td>Platform</td><td>Profile, paths and keys, spool vs record (names any spool line changed after it was recorded), spool format, witness. PASS / WARN / FAIL per layer; read-only.</td></tr>
         <tr><td><code>coc trust NODE KEY [--replace]</code></td><td>Witness</td><td>Adds a node's public key to <code>witness_nodes.toml</code>.</td></tr>
         <tr><td><code>coc verify [--witness URL] [--node-id ID]</code></td><td>Platform</td><td>The verifier: verdict JSON, exit 0 / 1 / 2.</td></tr>
       </tbody>
