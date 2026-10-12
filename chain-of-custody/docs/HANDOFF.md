@@ -6,11 +6,11 @@ Rule: a step is DONE only when its "Done when" check (DEFENCE_STEPS.md) AND its 
 Status key: [ ] todo, [~] in progress, [x] done, [!] red team broke it, needs fix
 
 ## Current state
-- Current step: D0-D10 built (D0-D9 red-team gates await Jeev's ticks; D10 run in Docker and its gate ticked 2026-10-12). Now: I0 (waiting for Jaganath) and I1 (ready for Antigravity)
-- Last agent: Claude (walked Jeev through DOCKER_HANDOVER.md, D10 verified, handover fixed for Windows PowerShell 5.1 and OneDrive. Before that: I0 drafts, CONTRACT v0.3, I0-I4 in DEFENCE_STEPS.md)
+- Current step: D0-D10 done, every red-team gate ticked (2026-10-12, Jeev's go-ahead after Claude re-checked each item). Now: I1 fixes on branch `step-i1` (RT-39 to RT-44), I0 still waiting for Jaganath
+- Last agent: Claude (re-checked D0-D9 gates: 157/157 tests on real Python 3.11.17 in the sidecar image, fresh validator and verifier attacks, verifier sabotaged twice for D9. Red-teamed Antigravity's I1 at 3c33680)
 - Layout: README, AGENTS.md, CLAUDE.md stay at the root (agents load them there); .antigravity/tasks.md stays where Antigravity reads it
-- Last commit reviewed: 4c32d6b plus Antigravity's uncommitted D8-D10 work; D8-D10 and fixes in 29141c8 (pushed); pytest 157 passed (one unexplained single failure in 10 runs, did not repeat)
-- Open bugs: none known. Not yet verified: Linux file ownership (RT-38; the Docker run was on Windows)
+- Last commit reviewed: 3c33680 (I1, branch `step-i1`); pytest 164 passed on it
+- Open bugs: I1 RT-39 to RT-47 (see log). `tests/test_redteam_d5_d7.py::test_rt25_heartbeat_thread_survives_db_error` fails in most full runs on Windows (passes alone and on Linux): the test sleeps a fixed 0.6 s, but `httpx.Client()` loading the CA bundle takes longer after the witness tests. Test-only bug; fix by polling for `calls >= 2` with a 5 s deadline. Not yet verified: Linux file ownership (RT-38; the Docker run was on Windows)
 - Contract notes RT-24 (hb_counter per send attempt) and RT-28 (verifier reports witness FORK / SEQ_ROLLBACK alerts): folded into the CONTRACT v0.3 draft
 - New CLI flags (deployment overrides, profile keys unchanged): verifier `--node-id`, sidecar `--witness-url`, witness `--nodes-file`
 - Window between heartbeats: newest interval_s + 2.5 s of events (32.5 s at default) can be removed or rewritten with no witness verdict
@@ -18,6 +18,7 @@ Status key: [ ] todo, [~] in progress, [x] done, [!] red team broke it, needs fi
 
 ## Trust model (what the red team may assume)
 - The attacker has admin on the platform host: can edit the sidecar SQLite file, the spool file and anything under data/ on that host.
+- That includes the node's private key (data/node1.key): the host admin can read it and re-sign a rewritten chain, so local checkpoints alone are not proof. The witness copy (D6-D8) is what catches that.
 - The attacker does not control the witness machine.
 - The platform is trusted for the content of events it writes (actor, ts, details). The defence proves logs were not changed after ingest; it cannot prove the platform told the truth.
 
@@ -27,95 +28,95 @@ Status key: [ ] todo, [~] in progress, [x] done, [!] red team broke it, needs fi
 - [x] Build ("Done when" passes)
 
 Red-team gate
-- [ ] config.toml, data/, spool/*.jsonl, *.key and CLAUDE.local.md are gitignored and none are tracked
-- [ ] Code runs on the stated minimum Python (3.11), not just the venv's version
+- [x] config.toml, data/, spool/*.jsonl, *.key and CLAUDE.local.md are gitignored and none are tracked
+- [x] Code runs on the stated minimum Python (3.11), not just the venv's version
 
 ## D1: Event generator and spool validator (the contract boundary)
 - [x] Build
 
 Red-team gate
-- [ ] Malformed line, missing field, extra field, wrong type: rejected, never silently accepted
-- [ ] Duplicate JSON keys, NaN/Infinity, floats at any depth, non-UTF-8, `\r\n`, blank lines: rejected
-- [ ] Event type outside the profile allow-list: rejected when the list is non-empty
-- [ ] Spoofed `actor` / `ts` from the platform: confirm this is documented as out of the defence's power (trust model), not silently assumed
+- [x] Malformed line, missing field, extra field, wrong type: rejected, never silently accepted
+- [x] Duplicate JSON keys, NaN/Infinity, floats at any depth, non-UTF-8, `\r\n`, blank lines: rejected
+- [x] Event type outside the profile allow-list: rejected when the list is non-empty
+- [x] Spoofed `actor` / `ts` from the platform: confirm this is documented as out of the defence's power (trust model), not silently assumed
 
 ## D2: Canonical JSON and hash-chained store
 - [x] Build
 
 Red-team gate
-- [ ] Two different-looking entries that serialize to the same canonical bytes?
-- [ ] Modify one field of an old entry: does the stored hash stop matching? (detection itself is D5)
-- [ ] Recompute the whole chain after editing: nothing stops this yet. Expected; D4 checkpoints + D8 witness catch it. Note it, do not fail D2 for it
-- [ ] Two writers at once: can the chain fork or skip a seq?
+- [x] Two different-looking entries that serialize to the same canonical bytes?
+- [x] Modify one field of an old entry: does the stored hash stop matching? (detection itself is D5)
+- [x] Recompute the whole chain after editing: nothing stops this yet. Expected; D4 checkpoints + D8 witness catch it. Note it, do not fail D2 for it
+- [x] Two writers at once: can the chain fork or skip a seq?
 
 ## D3: Ingest from the spool file
 - [x] Build (RT-05 to RT-09 fixed)
 
 Red-team gate
-- [ ] Crash between storing an entry and saving the spool offset: duplicate or missed event after restart?
-- [ ] An append that fails: is the event lost silently?
-- [ ] Spool truncated or replaced while running: loud stop, no silent re-ingest
-- [ ] Half-written last line: never ingested until complete
-- [ ] Forged lines appended to the spool by the attacker: inherent (spool is platform-writable), confirm it is documented
+- [x] Crash between storing an entry and saving the spool offset: duplicate or missed event after restart?
+- [x] An append that fails: is the event lost silently?
+- [x] Spool truncated or replaced while running: loud stop, no silent re-ingest
+- [x] Half-written last line: never ingested until complete
+- [x] Forged lines appended to the spool by the attacker: inherent (spool is platform-writable), confirm it is documented
 
 ## D4: Merkle tree, keys and signed checkpoints
 - [x] Build (checkpoints wired into main.py, RT-10 to RT-15 fixed)
 
 Red-team gate
-- [ ] Merkle roots match CONTRACT section 4 vectors for n=1..5, and sizes 1..8 are sane
-- [ ] Attacker with write access to the DB but not the key: can they forge a checkpoint?
-- [ ] Key storage decided and documented: private key on the platform host is readable by its admin, so local checkpoints alone are not proof. State this
-- [ ] Is the key ever logged, printed or committed?
-- [ ] Replay or delete an old validly signed checkpoint: detected? (local only: expected no; witness copy in D6/D8)
+- [x] Merkle roots match CONTRACT section 4 vectors for n=1..5, and sizes 1..8 are sane
+- [x] Attacker with write access to the DB but not the key: can they forge a checkpoint?
+- [x] Key storage decided and documented: private key on the platform host is readable by its admin, so local checkpoints alone are not proof. State this
+- [x] Is the key ever logged, printed or committed?
+- [x] Replay or delete an old validly signed checkpoint: detected? (local only: expected no; witness copy in D6/D8)
 
 ## D5: Verifier v1 (offline)
 - [x] Build (RT-17 to RT-22 fixed)
 
 Red-team gate
-- [ ] Edit one field of a middle entry -> EDIT
-- [ ] Delete a middle entry -> SEQ_GAP
-- [ ] Swap two entries (reorder) -> a sensible code at the right seq
-- [ ] Insert a forged entry -> detected
-- [ ] One tamper gives one clear first verdict, not a flood
-- [ ] Rewrite and re-chain everything after seq K: caught by CHECKPOINT_MISMATCH if a checkpoint covers K
-- [ ] Verifier crash or bad DB gives exit 2, never a false "clean"
+- [x] Edit one field of a middle entry -> EDIT
+- [x] Delete a middle entry -> SEQ_GAP
+- [x] Swap two entries (reorder) -> a sensible code at the right seq
+- [x] Insert a forged entry -> detected
+- [x] One tamper gives one clear first verdict, not a flood
+- [x] Rewrite and re-chain everything after seq K: caught by CHECKPOINT_MISMATCH if a checkpoint covers K
+- [x] Verifier crash or bad DB gives exit 2, never a false "clean"
 
 ## D6: Witness service
 - [x] Build (RT-23 fixed)
 
 Red-team gate
-- [ ] Heartbeat from a node not in nodes_file, or bad signature -> BAD_SIGNATURE
-- [ ] Replay an old valid heartbeat -> COUNTER_REPLAY
-- [ ] Lower head_seq -> SEQ_ROLLBACK; same head_seq, different hash -> FORK
-- [ ] Forged heartbeat vs missed heartbeat: handled differently (BAD_SIGNATURE vs SILENCE)
-- [ ] Witness tables are insert-only: no UPDATE/DELETE path in the code
-- [ ] Alert flooding: can junk requests bury a real alert?
-- [ ] Witness trusts its own clock, not the client's ts
+- [x] Heartbeat from a node not in nodes_file, or bad signature -> BAD_SIGNATURE
+- [x] Replay an old valid heartbeat -> COUNTER_REPLAY
+- [x] Lower head_seq -> SEQ_ROLLBACK; same head_seq, different hash -> FORK
+- [x] Forged heartbeat vs missed heartbeat: handled differently (BAD_SIGNATURE vs SILENCE)
+- [x] Witness tables are insert-only: no UPDATE/DELETE path in the code
+- [x] Alert flooding: can junk requests bury a real alert?
+- [x] Witness trusts its own clock, not the client's ts
 
 ## D7: Heartbeat client and checkpoint upload
 - [x] Build (RT-24 to RT-26 fixed; "Done when" checked end-to-end)
 
 Red-team gate
-- [ ] Tail truncation: drop the last N entries and keep sending heartbeats -> SEQ_ROLLBACK at the witness
-- [ ] Kill the heartbeat thread or the whole sidecar -> SILENCE
-- [ ] Sidecar restart: no COUNTER_REPLAY (counter persisted correctly)
-- [ ] Witness down: ingest keeps going, no crash, no log spam
-- [ ] Shared SQLite connection between ingest and heartbeat threads: safe?
+- [x] Tail truncation: drop the last N entries and keep sending heartbeats -> SEQ_ROLLBACK at the witness
+- [x] Kill the heartbeat thread or the whole sidecar -> SILENCE
+- [x] Sidecar restart: no COUNTER_REPLAY (counter persisted correctly)
+- [x] Witness down: ingest keeps going, no crash, no log spam
+- [x] Shared SQLite connection between ingest and heartbeat threads: safe?
 
 ## D8: Verifier v2 (with witness)
 - [x] Build (RT-28 to RT-30, RT-36 fixed)
 
 Red-team gate
-- [ ] Delete the last N entries -> TRUNCATION
-- [ ] Rewrite the whole chain and re-sign with the stolen local key -> FORK
-- [ ] Sidecar stopped past the silence window -> SILENCE
-- [ ] Window between heartbeats: how much can be tampered undetected? Write the number down
+- [x] Delete the last N entries -> TRUNCATION
+- [x] Rewrite the whole chain and re-sign with the stolen local key -> FORK
+- [x] Sidecar stopped past the silence window -> SILENCE
+- [x] Window between heartbeats: how much can be tampered undetected? Write the number down
 
 ## D9: Self-test tampering suite
 - [x] Build (RT-37 nitpick fixed)
 
 Red-team gate
-- [ ] Break the verifier on purpose once: the suite goes red
+- [x] Break the verifier on purpose once: the suite goes red
 
 ## D10: Docker packaging
 - [x] Build (RT-31 to RT-34, RT-16, RT-27 fixed; run 2026-10-12 on Jeev's machine, Docker Desktop on Windows 11, clone at C:\dev outside OneDrive: both images build, both containers up, heartbeats 200 OK every 30 s, 200 events -> verifier `clean: true`, exit 0)
@@ -140,16 +141,16 @@ Decisions (Jeev, 2026-10-10): collectors move into the defence (CONTRACT v0.3); 
 - [ ] Jaganath approves v0.2 + v0.3 and updates his pinned copy; then drop "DRAFT" from the CONTRACT title
 
 ## I1: `coc init` and `coc check`
-- [ ] Build
+- [!] Build (Antigravity, branch `step-i1`, 3c33680, not merged; red-teamed 2026-10-12: RT-39 to RT-47 below, fix RT-39 to RT-44 before merging)
 
 Red-team gate
-- [ ] Fresh clone: `coc init` then `coc check` pass with no manual edits
-- [ ] Broken profile (typo'd key, wrong type, missing key file, TOML syntax error): one clear error each, no stack trace
-- [ ] Witness laptop off: `coc check` fails in about 5 s with the network checklist, never hangs
-- [ ] `coc init` run twice changes nothing; `--force` is refused while the sidecar DB exists
-- [ ] After `coc check`, the DB, spool, offsets and keys are byte-identical and the witness has no new rows
-- [ ] The private key never appears in any output, log or error message
-- [ ] Witness refuses to start when `nodes_file` is missing or a folder
+- [!] Fresh clone: `coc init` then `coc check` pass with no manual edits (works with `python -m coc`; through the wrapper it breaks: RT-39, RT-40)
+- [x] Broken profile (typo'd key, wrong type, missing key file, TOML syntax error): one clear error each, no stack trace (also typo'd section and float interval; gaps in RT-42, RT-45)
+- [x] Witness laptop off: `coc check` fails in about 5 s with the network checklist, never hangs (4.4 s on Windows)
+- [x] `coc init` run twice changes nothing; `--force` is refused while the sidecar DB exists (but see RT-43, RT-44)
+- [x] After `coc check`, the DB, spool, offsets and keys are byte-identical and the witness has no new rows (`check` only GETs; it does leave empty `sidecar.db-wal`/`-shm` files, RT-46)
+- [x] The private key never appears in any output, log or error message
+- [x] Witness refuses to start when `nodes_file` is missing or a folder
 
 ## I2: Split compose and publish images
 - [ ] Build (detail before starting)
@@ -210,5 +211,14 @@ Red-team gate
 | D0/D6 | RT-16 unpinned requirements, RT-27 no body limit (carried) | WEAKENS / NITPICK | 29141c8 |
 | D10 | RT-35 Witness on the same host in demo compose | WEAKENS: host admin can reach it | accepted for demo, documented |
 | D10 | RT-38 Root-owned data/ on Linux | WEAKENS: host verifier may not open DB | documented, untested |
+| I1 | RT-39 Run `coc.ps1` outside the repo folder | BREAKS: `No module named coc` (image code is in /app, wrapper runs in /work); inside the repo it runs the mounted source, not the image. Fix: `ENV PYTHONPATH=/app` in sidecar/Dockerfile | open |
+| I1 | RT-40 `coc check` through the wrapper, witness on the same host | BREAKS: `localhost:8800` is the container itself, always "unreachable" (confirmed with a listener on host 8800; `host.docker.internal` reached it) | open |
+| I1 | RT-41 `coc init` from the repo root (wrapper copies at `cybersec_hackathon/coc.ps1`, `coc.sh`) | WEAKENS: writes config.toml and data/node1.key where chain-of-custody/.gitignore does not apply; `git add .` commits the private key. Fix: delete the root copies | open |
+| I1 | RT-42 `coc init` with node-1 when node-10 is in witness_nodes.toml, or after a new key pair | WEAKENS: substring check reports [EXISTS]; node-1 never added / stale key kept, witness rejects every heartbeat. Fix: parse with tomllib and compare the key | open |
+| I1 | RT-43 `node_id = "node 1"` (space) | WEAKENS: profile and init accept it, witness NODE_ID_RE rejects it later. Fix: same regex in coc/profile.py | open |
+| I1 | RT-44 `coc init --force` with no DB | WEAKENS: overwrites config.toml with the template, custom profile lost silently. Fix: --force regenerates keys only | open |
+| I1 | RT-45 Corrupt private key / `--witness-url` with `\1` / injected `--node-id` | NITPICK: init tracebacks (PEM error, re.error); injected node-id leaves a broken config.toml so later inits fail. Fix: validate flags before writing, lambda in re.sub, catch key load | open |
+| I1 | RT-46 `coc check` on a closed WAL DB | NITPICK: creates empty sidecar.db-wal/-shm (main DB byte-identical; the verifier does the same) | accepted |
+| I1 | RT-47 coc.sh on Linux runs the container as root | WEAKENS: config.toml and keys root-owned on the host (RT-38 again). Fix: `--user "$(id -u):$(id -g)"` | open |
 
 Full detail (why it broke, plan, verification), all in docs/red-team/: RED_TEAM_D0_D4.md (RT-01 to RT-16, including nitpicks RT-09, RT-14 to RT-16) RED_TEAM_D5_D7.md (RT-17 to RT-27, including nitpicks RT-22, RT-27) and RED_TEAM_D8_D10.md (RT-28 to RT-38, plus RT-16 and RT-27 closed)
