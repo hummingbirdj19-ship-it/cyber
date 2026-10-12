@@ -167,15 +167,26 @@ Red-team gate
 - [ ] Build (detail before starting)
 
 ## I4: Attack harness against the hacker repo
-- [ ] Build (detail before starting; needs the hacker repo link)
+- [ ] Build (on hold until the team meets; repo link known, see below)
 - [ ] Record the hacker repo commit tested; every attack that gets through goes in the findings log with a fix and a regression test
+
+### First external test (teammate, recorded 2026-10-12; not the I4 harness)
+- Repo: https://github.com/jrush-vj/chain-of-custody (monorepo: `banking-system/`, `defense/`, `hacker-agent/`), HEAD `f3e3376`. Read only by Claude; nothing run, committed or pushed there
+- What was tested: `defense/` is our code at `ad1573f` (2026-10-10, before I1/I2: no `coc`, none of the I1/I2 fixes) plus two of his commits: `6b997f1` (witness dashboard at `/`) and `f3e3376` (signed `SPOOL_TAMPER` alert, new witness endpoint `POST /tamper-alert`). Sidecar on his VPS, witness on a separate VPS (Railway per his README)
+- Attack and result: edited the newest spool line (amount 5000 -> 5). The sidecar's RT-07 check stopped ingest; his commit sent `SPOOL_TAMPER` to the witness; heartbeats stopped, so the witness raised SILENCE. Reported as "passes"
+- Our reading:
+  - Correct reaction, but this is a spool edit, not a log edit: the chain still holds 5000 and the verifier would report the true record. Strong demo line, not yet shown
+  - Only the newest consumed spool line is checked: an older line edited (same length) raises nothing. The chain is still right, so no record is lost; inherent (spool is platform-writable, trust model)
+  - Not yet tested: edits to the sidecar DB (the record itself) followed by `coc verify`; the four demo attacks on the guide cover these
+  - His changes: dashboard escapes alert text (no injection). `SPOOL_TAMPER` is outside CONTRACT.md (needs the change protocol), `_tamper_detail` reads `details.new.amount` (bank-specific code in the defence, against AGENTS.md), and a root attacker holds the node key, so the alert explains a stop but proves nothing; SILENCE stays the real signal
+- For the meetup: (1) his deployment uses our published images and split compose files, keeping only his deploy files and the bank's spooler; (2) decide whether `SPOOL_TAMPER` comes into our repo as a contract change, written generically; (3) rerun his attacks against the sidecar DB and judge by `coc verify`
 
 ### Open questions
 - [x] Distribution: Docker only (pip after the hackathon, if the project continues)
 - [x] Generic collectors in the defence: yes, via CONTRACT v0.3
 - [x] Witness for the demo: second laptop (same hotspot, firewall open on 8800, clocks synced)
 - [ ] Platform repo link (Jeev gives it once I1/I2 are in place)
-- [ ] Hacker repo link
+- [x] Hacker repo link: https://github.com/jrush-vj/chain-of-custody (also holds the bank platform and a fork of the defence; see I4)
 - [x] Platform database: PostgreSQL 15 (`postgres` driver added to the v0.3 draft). Logs: morgan combined, errors only, stdout only; nginx access log to stdout only
 - [ ] Jaganath's replies and platform changes: docs/PLATFORM_HANDOVER.md
 
