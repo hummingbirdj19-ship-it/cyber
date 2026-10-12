@@ -6,10 +6,10 @@ Rule: a step is DONE only when its "Done when" check (DEFENCE_STEPS.md) AND its 
 Status key: [ ] todo, [~] in progress, [x] done, [!] red team broke it, needs fix
 
 ## Current state
-- Current step: I2 built on branch `step-i2`, verified locally; not merged. Waiting on Jeev: merge + push to main publishes the images to GHCR (public, the repo is public). After the first publish: check the Actions run and pull-scan the images. I0 still waits for Jaganath's OK, which blocks I3
-- Last agent: Claude (I2: split compose files, published image names, publish workflow, config-less witness, `coc trust`, `coc verify`, one localhost rule for sidecar/check/verify. Two-laptop run simulated in Docker from two empty folders: check PASS, verify clean 200/200)
+- Current step: D0-D10, I1 and I2 done (2026-10-12). Images published to GHCR (public, amd64 + arm64). Next: a real two-laptop run (same hotspot, port 8800 open on the witness laptop). I3 waits for Jaganath's contract OK and his two platform changes (audit triggers must cover the users/profiles table too); I4 waits for the hacker repo link
+- Last agent: Claude (I2 merged as 9e376dd and pushed; publish run 38221752153 green; pulled both images anonymously and scanned them. Docs-only commits no longer republish)
 - Layout: README, AGENTS.md, CLAUDE.md stay at the root (agents load them there); .antigravity/tasks.md stays where Antigravity reads it
-- Last commit reviewed: step-i2 (I2); pytest 197 passed on Windows; on Python 3.11 in the image all pass except the workflow test, which skips there (only chain-of-custody/ is copied in)
+- Last commit reviewed: 9e376dd (I2 merge); pytest 197 passed on Windows, 196 + 1 skip on Python 3.11 in the image
 - Open bugs: none known. Run pytest from chain-of-custody/: from the repo root 7 older packaging tests fail (they read files by relative path; not a code bug). Not yet verified: Linux file ownership of sidecar-written files (RT-38), coc.sh on a real Linux host (syntax-checked only)
 - Contract notes RT-24 (hb_counter per send attempt) and RT-28 (verifier reports witness FORK / SEQ_ROLLBACK alerts): folded into the CONTRACT v0.3 draft
 - New CLI flags (deployment overrides, profile keys unchanged): verifier `--node-id`, sidecar `--witness-url`, witness `--nodes-file`
@@ -153,10 +153,10 @@ Red-team gate
 - [x] Witness refuses to start when `nodes_file` is missing or a folder
 
 ## I2: Split compose and publish images
-- [~] Build (branch `step-i2`; everything but the first real publish is done and checked locally, 2026-10-12)
+- [x] Build (merged 9e376dd 2026-10-12; workflow run 38221752153 published ghcr.io/jeevikas-19/coc-sidecar and coc-witness, latest + sha-9e376dd, linux/amd64 + linux/arm64)
 
 Red-team gate
-- [~] Published images: no keys, DBs, config.toml or witness_nodes.toml inside (local builds under the published names: scan clean, and the same scan finds a planted key and config.toml; repeat on the pulled images after the first publish)
+- [x] Published images: no keys, DBs, config.toml or witness_nodes.toml inside (pulled anonymously from GHCR: scan clean; the same scan finds a planted key)
 - [x] Witness laptop runs from an empty folder with only witness-compose.yml, the wrapper and witness_nodes.toml; platform laptop with only sidecar-compose.yml and the wrapper (simulated on one machine, two folders: `coc check` PASS with heartbeats, `coc verify` clean 200/200, exit 0)
 - [x] Profile witness_url left at localhost inside a container: the sidecar and `coc check` agree (both use `sidecar.heartbeat.resolve_witness_url`; seen in the sidecar log and check output, and tested)
 - [x] `coc trust`: bad node id, bad key, BOM, existing different key: refused with one clear error, file unchanged (tests in tests/test_i2.py)

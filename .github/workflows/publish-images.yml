@@ -5,7 +5,12 @@ name: publish-images
 on:
   push:
     branches: [main]
-    paths: ["chain-of-custody/**", ".github/workflows/publish-images.yml"]
+    # Code and image inputs only: a docs-only commit does not republish
+    paths:
+      - "chain-of-custody/**"
+      - "!chain-of-custody/docs/**"
+      - "!chain-of-custody/**/*.md"
+      - ".github/workflows/publish-images.yml"
   workflow_dispatch:
 
 permissions:
