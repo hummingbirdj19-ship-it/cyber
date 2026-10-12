@@ -65,7 +65,15 @@ def create_app(
     with open(config_path, "rb") as f:
         config = tomllib.load(f)
     interval_s = float(config["heartbeat"]["interval_s"])
-    nodes = checks.load_nodes(nodes_file or Path(config["witness"]["nodes_file"]))
+    nodes_path = nodes_file or Path(config["witness"]["nodes_file"])
+    if not nodes_path.exists():
+        raise FileNotFoundError(f"nodes_file '{nodes_path}' is missing")
+    if nodes_path.is_dir():
+        raise ValueError(
+            f"nodes_file '{nodes_path}' is a directory, not a file "
+            "(Docker creates a folder when the file is missing on the host)"
+        )
+    nodes = checks.load_nodes(nodes_path)
     conn = store.connect(config["witness"]["db_path"])
     lock = threading.Lock()
     started_at = now()
@@ -180,8 +188,21 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--nodes-file", type=Path, default=None, help="override [witness] nodes_file")
     args = parser.parse_args(argv)
     with open(args.config, "rb") as f:
-        port = int(tomllib.load(f)["witness"]["port"])
-    uvicorn.run(create_app(args.config, nodes_file=args.nodes_file), host=args.host, port=port)
+        config = tomllib.load(f)
+    nodes_path = args.nodes_file or Path(config["witness"]["nodes_file"])
+    if not nodes_path.exists():
+        logger.error("nodes_file '%s' is missing", nodes_path)
+        sys.stderr.write(f"Error: nodes_file '{nodes_path}' is missing\n")
+        return 2
+    if nodes_path.is_dir():
+        logger.error("nodes_file '%s' is a directory, not a file", nodes_path)
+        sys.stderr.write(
+            f"Error: nodes_file '{nodes_path}' is a directory, not a file "
+            "(Docker creates a folder when the file is missing on the host)\n"
+        )
+        return 2
+    port = int(config["witness"]["port"])
+    uvicorn.run(create_app(args.config, nodes_file=nodes_path), host=args.host, port=port)
     return 0
 
 

@@ -33,7 +33,7 @@ Step details live in docs/DEFENCE_STEPS.md. Integration details live in docs/INT
 
 ## Integration-ready (docs/DEFENCE_STEPS.md, I steps)
 - [ ] I0 CONTRACT v0.3 approved by platform integrator (no code)
-- [ ] I1 `coc init` and `coc check` (new `coc/` package, wrapper scripts, witness nodes_file check)
+- [x] I1 `coc init` and `coc check` (new `coc/` package, wrapper scripts, witness nodes_file check)
 - [ ] I2 split compose files and published images
 - [ ] I3 collectors (after I0 approval)
 - [ ] I4 attack harness against the hacker repo

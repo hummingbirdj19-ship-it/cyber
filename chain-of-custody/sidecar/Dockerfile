@@ -12,5 +12,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY sidecar/ sidecar/
 COPY tools/ tools/
 COPY verifier/ verifier/
+COPY coc/ coc/
 
 CMD ["python", "-m", "sidecar.main", "--config", "config.toml"]
