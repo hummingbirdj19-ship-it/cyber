@@ -5,7 +5,7 @@
 
 services:
   witness:
-    image: ${COC_IMAGE_PREFIX:-ghcr.io/jeevikas-19}/coc-witness:${COC_TAG:-latest}
+    image: ${COC_IMAGE_PREFIX:-ghcr.io/hummingbirdj19-ship-it}/coc-witness:${COC_TAG:-latest}
     container_name: chain-of-custody-witness
     restart: unless-stopped
     ports:

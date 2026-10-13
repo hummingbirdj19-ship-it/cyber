@@ -201,7 +201,7 @@ Hiccups:
 
 ## I2: Split compose and publish images
 Build:
-- Image names everywhere: `ghcr.io/jeevikas-19/coc-sidecar` and `ghcr.io/jeevikas-19/coc-witness` (GHCR wants a lowercase owner). Compose files take `${COC_IMAGE_PREFIX:-ghcr.io/jeevikas-19}` and `${COC_TAG:-latest}`, so a fork or a pinned version needs no edit. `defence-compose.yml` keeps `build:` (local dev and the single-host demo) and tags its builds with the same names, so a local build is exactly what the wrappers run. Container names stay `chain-of-custody-sidecar` / `-witness`.
+- Image names everywhere: `ghcr.io/hummingbirdj19-ship-it/coc-sidecar` and `ghcr.io/hummingbirdj19-ship-it/coc-witness` (GHCR wants a lowercase owner). Compose files take `${COC_IMAGE_PREFIX:-ghcr.io/hummingbirdj19-ship-it}` and `${COC_TAG:-latest}`, so a fork or a pinned version needs no edit. `defence-compose.yml` keeps `build:` (local dev and the single-host demo) and tags its builds with the same names, so a local build is exactly what the wrappers run. Container names stay `chain-of-custody-sidecar` / `-witness`.
 - Publishing: `.github/workflows/publish-images.yml` (repo root, where GitHub reads workflows). On push to main touching `chain-of-custody/**`, and by hand (`workflow_dispatch`): build both images for `linux/amd64` and `linux/arm64` (Apple-silicon laptops), push `latest` and `sha-<short>`, with `GITHUB_TOKEN` (`packages: write`), no personal token. The repo is public, so the packages are public; images hold code only (`.dockerignore`).
 - `sidecar-compose.yml` (platform laptop): the sidecar only, `image:` not `build:`. Mounts as in `defence-compose.yml` (spool read-only, `./data`, `./config.toml` read-only). No `--witness-url` override: the profile's `[heartbeat] witness_url` is used (set by `coc init --witness-url`). `extra_hosts: host.docker.internal:host-gateway`.
 - `witness-compose.yml` (witness laptop): the witness only, `image:`. Needs no `config.toml`: the witness gets `--interval-s`, `--db-path`, `--port` flags (defaults 30, `data/witness.db`, 8800; a `--config` still works and flags override it). Mounts `./witness_nodes.toml` read-only and the `witness-data` volume. `COC_INTERVAL_S` must equal the sidecar profile's `interval_s`, or SILENCE fires early or late. Host port `${COC_WITNESS_PORT:-8800}`.
@@ -211,7 +211,7 @@ Build:
   - `coc verify [--config] [--witness URL] [--node-id]`: the verifier, run from the image, same output and exit codes as `python -m verifier`.
   - `coc init` prints the exact `coc trust ...` line for the witness laptop.
 - `coc init` without a `config.example.toml` (no clone) uses the built-in template; a test keeps the two identical.
-- Wrappers default to `ghcr.io/jeevikas-19/coc-sidecar:latest` (`COC_IMAGE` overrides).
+- Wrappers default to `ghcr.io/hummingbirdj19-ship-it/coc-sidecar:latest` (`COC_IMAGE` overrides).
 
 Done when:
 - Witness laptop: an empty folder with only `witness-compose.yml`, `coc.ps1`/`coc.sh` and the `witness_nodes.toml` made by `coc trust` runs the witness.

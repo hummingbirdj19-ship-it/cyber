@@ -308,13 +308,13 @@ footer { border-top: 1px solid var(--border); margin-top: 64px; padding: 24px 16
     <ol class="steps">
       <li><p class="step-title">Make a folder and download two files.</p>
         <div class="os-only" data-os="win"><div class="code"><pre>mkdir C:\coc-witness; cd C:\coc-witness
-$base = "https://raw.githubusercontent.com/JeevikaS-19/cybersec_hackathon/main/chain-of-custody"
+$base = "https://raw.githubusercontent.com/hummingbirdj19-ship-it/cyber/main/chain-of-custody"
 Invoke-WebRequest -UseBasicParsing "$base/witness-compose.yml" -OutFile witness-compose.yml
 Invoke-WebRequest -UseBasicParsing "$base/coc.ps1" -OutFile coc.ps1
 Set-ExecutionPolicy -Scope Process Bypass</pre></div>
           <p class="expect">The last line lets this PowerShell window run <code>coc.ps1</code>. No admin needed; it ends when you close the window.</p></div>
         <div class="os-only" data-os="nix" hidden><div class="code"><pre>mkdir -p ~/coc-witness && cd ~/coc-witness
-base=https://raw.githubusercontent.com/JeevikaS-19/cybersec_hackathon/main/chain-of-custody
+base=https://raw.githubusercontent.com/hummingbirdj19-ship-it/cyber/main/chain-of-custody
 curl -fsSL -O "$base/witness-compose.yml" -O "$base/coc.sh"
 chmod +x coc.sh</pre></div></div></li>
       <li><p class="step-title">Trust the platform laptop's key.</p>
@@ -340,13 +340,13 @@ hostname -I                 # Linux (open 8800 in ufw/firewalld if enabled)</pre
       <li><p class="step-title">Make a folder, download two files, run <code>coc init</code>.</p>
         <p>Replace <code>WITNESS-IP</code> with the witness laptop's address.</p>
         <div class="os-only" data-os="win"><div class="code"><pre>mkdir C:\coc-platform; cd C:\coc-platform
-$base = "https://raw.githubusercontent.com/JeevikaS-19/cybersec_hackathon/main/chain-of-custody"
+$base = "https://raw.githubusercontent.com/hummingbirdj19-ship-it/cyber/main/chain-of-custody"
 Invoke-WebRequest -UseBasicParsing "$base/sidecar-compose.yml" -OutFile sidecar-compose.yml
 Invoke-WebRequest -UseBasicParsing "$base/coc.ps1" -OutFile coc.ps1
 Set-ExecutionPolicy -Scope Process Bypass
 .\coc.ps1 init --witness-url http://WITNESS-IP:8800</pre></div></div>
         <div class="os-only" data-os="nix" hidden><div class="code"><pre>mkdir -p ~/coc-platform && cd ~/coc-platform
-base=https://raw.githubusercontent.com/JeevikaS-19/cybersec_hackathon/main/chain-of-custody
+base=https://raw.githubusercontent.com/hummingbirdj19-ship-it/cyber/main/chain-of-custody
 curl -fsSL -O "$base/sidecar-compose.yml" -O "$base/coc.sh"
 chmod +x coc.sh
 ./coc.sh init --witness-url http://WITNESS-IP:8800</pre></div></div>
@@ -373,8 +373,8 @@ chmod +x coc.sh
     <details>
       <summary>No platform yet? Generate test events</summary>
       <p>On the platform laptop, this writes 200 realistic events into the spool, the way a platform would:</p>
-      <div class="os-only" data-os="win"><div class="code"><pre>docker run --rm -v "${PWD}:/work" -w /work ghcr.io/jeevikas-19/coc-sidecar:latest python -P -m tools.gen_events --config config.toml --count 200 --rate 20</pre></div></div>
-      <div class="os-only" data-os="nix" hidden><div class="code"><pre>docker run --rm --user "$(id -u):$(id -g)" -v "$PWD":/work -w /work ghcr.io/jeevikas-19/coc-sidecar:latest python -P -m tools.gen_events --config config.toml --count 200 --rate 20</pre></div></div>
+      <div class="os-only" data-os="win"><div class="code"><pre>docker run --rm -v "${PWD}:/work" -w /work ghcr.io/hummingbirdj19-ship-it/coc-sidecar:latest python -P -m tools.gen_events --config config.toml --count 200 --rate 20</pre></div></div>
+      <div class="os-only" data-os="nix" hidden><div class="code"><pre>docker run --rm --user "$(id -u):$(id -g)" -v "$PWD":/work -w /work ghcr.io/hummingbirdj19-ship-it/coc-sidecar:latest python -P -m tools.gen_events --config config.toml --count 200 --rate 20</pre></div></div>
     </details>
   </section>
 
@@ -390,13 +390,13 @@ chmod +x coc.sh
         <div class="code"><pre>.\coc.ps1 verify --witness http://WITNESS-IP:8800 --node-id node-1</pre></div>
         <p class="expect"><span class="code-tag tag-ok">clean: true</span> 200 entries, exit 0.</p></li>
       <li><p class="step-title">Attack 1: quietly change who did something (entry 42).</p>
-        <div class="code"><pre>docker run --rm -v "${PWD}:/work" -w /work ghcr.io/jeevikas-19/coc-sidecar:latest python -c "import sqlite3; c = sqlite3.connect('data/sidecar.db'); c.execute('UPDATE entries SET actor = ? WHERE seq = 42', ('mallory',)); c.commit()"</pre></div>
+        <div class="code"><pre>docker run --rm -v "${PWD}:/work" -w /work ghcr.io/hummingbirdj19-ship-it/coc-sidecar:latest python -c "import sqlite3; c = sqlite3.connect('data/sidecar.db'); c.execute('UPDATE entries SET actor = ? WHERE seq = 42', ('mallory',)); c.commit()"</pre></div>
         <p class="expect">Verify again: <span class="code-tag tag-bad">EDIT</span> at seq 42, exit 1.</p></li>
       <li><p class="step-title">Attack 2: delete an embarrassing entry (entry 120).</p>
-        <div class="code"><pre>docker run --rm -v "${PWD}:/work" -w /work ghcr.io/jeevikas-19/coc-sidecar:latest python -c "import sqlite3; c = sqlite3.connect('data/sidecar.db'); c.execute('DELETE FROM entries WHERE seq = 120'); c.commit()"</pre></div>
+        <div class="code"><pre>docker run --rm -v "${PWD}:/work" -w /work ghcr.io/hummingbirdj19-ship-it/coc-sidecar:latest python -c "import sqlite3; c = sqlite3.connect('data/sidecar.db'); c.execute('DELETE FROM entries WHERE seq = 120'); c.commit()"</pre></div>
         <p class="expect">Verify again: adds <span class="code-tag tag-bad">SEQ_GAP</span> at 120 (the hole), plus the broken link and the checkpoint that no longer matches.</p></li>
       <li><p class="step-title">Attack 3: cut off the newest events (190 onward).</p>
-        <div class="code"><pre>docker run --rm -v "${PWD}:/work" -w /work ghcr.io/jeevikas-19/coc-sidecar:latest python -c "import sqlite3; c = sqlite3.connect('data/sidecar.db'); c.execute('DELETE FROM entries WHERE seq &gt;= 190'); c.commit()"</pre></div>
+        <div class="code"><pre>docker run --rm -v "${PWD}:/work" -w /work ghcr.io/hummingbirdj19-ship-it/coc-sidecar:latest python -c "import sqlite3; c = sqlite3.connect('data/sidecar.db'); c.execute('DELETE FROM entries WHERE seq &gt;= 190'); c.commit()"</pre></div>
         <p class="expect">Wait 35 s for the next heartbeat, verify again: adds <span class="code-tag tag-bad">TRUNCATION</span>. Locally the tail looks fine; only the witness knows there were 200.</p></li>
       <li><p class="step-title">Attack 4: switch the logging off.</p>
         <div class="code"><pre>docker compose -f sidecar-compose.yml stop sidecar</pre></div>
@@ -428,7 +428,7 @@ docker compose -f witness-compose.yml up -d</pre></div>
   <!-- ============================================================ INTEGRATE -->
   <section id="integrate">
     <h2>Plug in a platform</h2>
-    <p class="sub">Protecting a new platform means writing a profile, never changing the defence code. The interface is <a href="https://github.com/JeevikaS-19/cybersec_hackathon/blob/main/chain-of-custody/docs/CONTRACT.md">CONTRACT.md</a>; this is the short version.</p>
+    <p class="sub">Protecting a new platform means writing a profile, never changing the defence code. The interface is <a href="https://github.com/hummingbirdj19-ship-it/cyber/blob/main/chain-of-custody/docs/CONTRACT.md">CONTRACT.md</a>; this is the short version.</p>
 
     <h3>The event format (one JSON object per line in the spool)</h3>
     <div class="code"><pre>{"source": "app", "ts": "2026-10-12T09:15:30Z", "actor": "asha", "event_type": "login_success", "details": {"ip": "10.0.0.5"}}</pre></div>
@@ -443,7 +443,7 @@ docker compose -f witness-compose.yml up -d</pre></div>
       </tbody>
     </table></div>
     <p>The spool is append-only, one writer, one line per write, <code>\n</code> line endings. Anything that breaks a rule is rejected, never silently accepted. Check a spool before going live:</p>
-    <div class="code"><pre>docker run --rm -v "${PWD}:/work" -w /work ghcr.io/jeevikas-19/coc-sidecar:latest python -P -m tools.validate_spool spool/events.jsonl --config config.toml</pre></div>
+    <div class="code"><pre>docker run --rm -v "${PWD}:/work" -w /work ghcr.io/hummingbirdj19-ship-it/coc-sidecar:latest python -P -m tools.validate_spool spool/events.jsonl --config config.toml</pre></div>
 
     <h3>The profile (<code>config.toml</code>, written by <code>coc init</code>)</h3>
     <div class="table-wrap"><table>
@@ -510,18 +510,18 @@ docker compose -f witness-compose.yml up -d</pre></div>
       <thead><tr><th>Setting</th><th>Default</th><th>Use</th></tr></thead>
       <tbody>
         <tr><td><code>COC_TAG</code></td><td><code>latest</code></td><td>Pin images, e.g. <code>sha-9e376dd</code> (compose files)</td></tr>
-        <tr><td><code>COC_IMAGE_PREFIX</code></td><td><code>ghcr.io/jeevikas-19</code></td><td>A fork's own registry (compose files)</td></tr>
+        <tr><td><code>COC_IMAGE_PREFIX</code></td><td><code>ghcr.io/hummingbirdj19-ship-it</code></td><td>A fork's own registry (compose files)</td></tr>
         <tr><td><code>COC_IMAGE</code></td><td><code>…/coc-sidecar:latest</code></td><td>Image the <code>coc</code> wrapper runs</td></tr>
         <tr><td><code>SPOOL_DIR</code></td><td><code>./spool</code></td><td>The platform's spool folder (sidecar, mounted read-only)</td></tr>
         <tr><td><code>COC_INTERVAL_S</code></td><td><code>30</code></td><td>Witness: must equal the profile's <code>interval_s</code></td></tr>
         <tr><td><code>COC_WITNESS_PORT</code></td><td><code>8800</code></td><td>Witness: port on the laptop</td></tr>
       </tbody>
     </table></div>
-    <p>Source, contract and red-team reports: <a href="https://github.com/JeevikaS-19/cybersec_hackathon/tree/main/chain-of-custody">github.com/JeevikaS-19/cybersec_hackathon</a>.</p>
+    <p>Source, contract and red-team reports: <a href="https://github.com/hummingbirdj19-ship-it/cyber/tree/main/chain-of-custody">github.com/hummingbirdj19-ship-it/cyber</a>.</p>
   </section>
 </main>
 
-<footer>Chain of Custody · Hackurity 2026 · base model · <a href="https://github.com/JeevikaS-19/cybersec_hackathon">source on GitHub</a></footer>
+<footer>Chain of Custody · Hackurity 2026 · base model · <a href="https://github.com/hummingbirdj19-ship-it/cyber">source on GitHub</a></footer>
 
 <script>
 (function () {

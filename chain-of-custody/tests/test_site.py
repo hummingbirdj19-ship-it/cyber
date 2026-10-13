@@ -6,7 +6,7 @@ import pytest
 
 REPO = Path(__file__).resolve().parents[1]
 PAGE = REPO / "site" / "index.html"
-RAW = "https://raw.githubusercontent.com/JeevikaS-19/cybersec_hackathon/main/chain-of-custody"
+RAW = "https://raw.githubusercontent.com/hummingbirdj19-ship-it/cyber/main/chain-of-custody"
 
 
 def _page() -> str:
@@ -59,5 +59,5 @@ def test_documented_coc_commands_exist(command: str) -> None:
 
 def test_image_name_matches_the_compose_files() -> None:
     """The image the guide runs is the one the compose files and wrappers use."""
-    assert "ghcr.io/jeevikas-19/coc-sidecar:latest" in _page()
-    assert "ghcr.io/jeevikas-19}/coc-sidecar" in (REPO / "sidecar-compose.yml").read_text(encoding="utf-8")
+    assert "ghcr.io/hummingbirdj19-ship-it/coc-sidecar:latest" in _page()
+    assert "ghcr.io/hummingbirdj19-ship-it}/coc-sidecar" in (REPO / "sidecar-compose.yml").read_text(encoding="utf-8")

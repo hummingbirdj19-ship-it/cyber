@@ -4,7 +4,7 @@
 
 **Short version:** you will not write any adapter code. The defence now ships its own collectors, which read the evidence the platform leaves behind. You need to make two small changes (one nginx config line and one SQL migration) and answer two questions. Nothing in the app's JavaScript changes.
 
-The contract is `chain-of-custody/docs/CONTRACT.md` on `main` of https://github.com/JeevikaS-19/cybersec_hackathon. The main changes are in section 7 ("Config keys").
+The contract is `chain-of-custody/docs/CONTRACT.md` on `main` of https://github.com/hummingbirdj19-ship-it/cyber. The main changes are in section 7 ("Config keys").
 
 ---
 

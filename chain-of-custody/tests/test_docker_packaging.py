@@ -44,6 +44,6 @@ def test_integration_docs_publish_docker_details() -> None:
     assert path.exists()
     content = path.read_text(encoding="utf-8")
     assert "defence-compose.yml" in content
-    assert "ghcr.io/jeevikas-19/coc-sidecar:latest" in content
-    assert "ghcr.io/jeevikas-19/coc-witness:latest" in content
+    assert "ghcr.io/hummingbirdj19-ship-it/coc-sidecar:latest" in content
+    assert "ghcr.io/hummingbirdj19-ship-it/coc-witness:latest" in content
     assert "http://witness:8800" in content

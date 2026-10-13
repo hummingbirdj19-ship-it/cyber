@@ -22,8 +22,8 @@ Clone into a folder **outside OneDrive** (or Dropbox, Google Drive). `data/` hol
 ```
 mkdir C:\dev -Force
 cd C:\dev
-git clone https://github.com/JeevikaS-19/cybersec_hackathon.git
-cd cybersec_hackathon/chain-of-custody
+git clone https://github.com/hummingbirdj19-ship-it/cyber.git
+cd cyber/chain-of-custody
 py -m venv .venv
 .venv\Scripts\activate
 pip install -r requirements.txt
@@ -71,8 +71,8 @@ docker inspect chain-of-custody-sidecar --format "{{json .Mounts}}"
 - No mount may have the name `witness-data` (only the witness may see that volume).
 
 ```
-docker run --rm ghcr.io/jeevikas-19/coc-sidecar:latest find /app -name "*.key" -o -name "*.pub" -o -name "*.db" -o -name config.toml
-docker run --rm ghcr.io/jeevikas-19/coc-witness:latest find /app -name "*.key" -o -name "*.pub" -o -name "*.db" -o -name config.toml
+docker run --rm ghcr.io/hummingbirdj19-ship-it/coc-sidecar:latest find /app -name "*.key" -o -name "*.pub" -o -name "*.db" -o -name config.toml
+docker run --rm ghcr.io/hummingbirdj19-ship-it/coc-witness:latest find /app -name "*.key" -o -name "*.pub" -o -name "*.db" -o -name config.toml
 ```
 - Both must print **nothing**. If they print a file, a secret was copied into the image.
 

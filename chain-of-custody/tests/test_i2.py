@@ -20,8 +20,8 @@ from witness.app import create_app, witness_settings
 from witness.app import main as witness_main
 
 REPO = Path(__file__).resolve().parents[1]
-SIDECAR_IMAGE = "${COC_IMAGE_PREFIX:-ghcr.io/jeevikas-19}/coc-sidecar:${COC_TAG:-latest}"
-WITNESS_IMAGE = "${COC_IMAGE_PREFIX:-ghcr.io/jeevikas-19}/coc-witness:${COC_TAG:-latest}"
+SIDECAR_IMAGE = "${COC_IMAGE_PREFIX:-ghcr.io/hummingbirdj19-ship-it}/coc-sidecar:${COC_TAG:-latest}"
+WITNESS_IMAGE = "${COC_IMAGE_PREFIX:-ghcr.io/hummingbirdj19-ship-it}/coc-witness:${COC_TAG:-latest}"
 
 
 def _read(rel: str) -> str:
@@ -66,7 +66,7 @@ def test_local_build_uses_the_published_names() -> None:
     assert text.count("build:") == 2
     assert f"image: {SIDECAR_IMAGE}" in text and f"image: {WITNESS_IMAGE}" in text
     for wrapper in ("coc.ps1", "coc.sh"):
-        assert "ghcr.io/jeevikas-19/coc-sidecar:latest" in _read(wrapper)
+        assert "ghcr.io/hummingbirdj19-ship-it/coc-sidecar:latest" in _read(wrapper)
     assert "--config" not in _read("witness/Dockerfile").split("CMD", 1)[1]
 
 

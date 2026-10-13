@@ -40,8 +40,8 @@ Exit code 0 on a long run of real traffic means the platform is integrated. Then
 The platform's compose file includes `defence-compose.yml` unchanged. Per platform you supply only the spool folder, the profile and the witness's list of trusted node keys.
 
 ### Images and services
-- Sidecar image: `ghcr.io/jeevikas-19/coc-sidecar:latest` (from `sidecar/Dockerfile`, Python 3.11; published by `.github/workflows/publish-images.yml`, or built locally by `defence-compose.yml` under the same name)
-- Witness image: `ghcr.io/jeevikas-19/coc-witness:latest` (from `witness/Dockerfile`, Python 3.11; same)
+- Sidecar image: `ghcr.io/hummingbirdj19-ship-it/coc-sidecar:latest` (from `sidecar/Dockerfile`, Python 3.11; published by `.github/workflows/publish-images.yml`, or built locally by `defence-compose.yml` under the same name)
+- Witness image: `ghcr.io/hummingbirdj19-ship-it/coc-witness:latest` (from `witness/Dockerfile`, Python 3.11; same)
 - Compose file: `defence-compose.yml`. No keys, DBs or `config.toml` go into the images (`.dockerignore`).
 
 ### Mounts

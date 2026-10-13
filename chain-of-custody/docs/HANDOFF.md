@@ -6,6 +6,8 @@ Rule: a step is DONE only when its "Done when" check (DEFENCE_STEPS.md) AND its 
 Status key: [ ] todo, [~] in progress, [x] done, [!] red team broke it, needs fix
 
 ## Current state
+- Repo moved (2026-10-13): https://github.com/hummingbirdj19-ship-it/cyber. Images `ghcr.io/hummingbirdj19-ship-it/coc-sidecar` and `coc-witness` (published by the same workflow there; the packages must be set public once), guide at https://hummingbirdj19-ship-it.github.io/cyber/ (Pages source: GitHub Actions). The old repo JeevikaS-19/cybersec_hackathon is retired; the old `ghcr.io/jeevikas-19` images are no longer updated
+- Open branches, not merged (each waits for review): `spool-record-check` (coc check names spool lines changed after recording; teammate to review) and `contract-change-dynamic-heartbeat` (CONTRACT v0.4: busy heartbeats + witness LATE; needs Jaganath's OK by the change protocol). See "Known gaps and plan" below
 - Current step: D0-D10, I1 and I2 done (2026-10-12). Images published to GHCR (public, amd64 + arm64). Next: a real two-laptop run (same hotspot, port 8800 open on the witness laptop). I3 waits for Jaganath's contract OK and his two platform changes (audit triggers must cover the users/profiles table too); I4 waits for the hacker repo link
 - Last agent: Claude (setup guide site/index.html for teammates, judges and integrators; every setup, demo and reset command on it was run verbatim on two folders with files downloaded from main: check PASS, demo verdicts EDIT, SEQ_GAP, TRUNCATION, SILENCE as stated. Published by .github/workflows/publish-site.yml once Pages uses GitHub Actions. Before that: I2)
 - Layout: README, AGENTS.md, CLAUDE.md stay at the root (agents load them there); .antigravity/tasks.md stays where Antigravity reads it
@@ -189,6 +191,24 @@ Red-team gate
 - [x] Hacker repo link: https://github.com/jrush-vj/chain-of-custody (test rig: a stand-in bank to attack plus a copy of the defence; see I4)
 - [x] Platform database: PostgreSQL 15 (`postgres` driver added to the v0.3 draft). Logs: morgan combined, errors only, stdout only; nginx access log to stdout only
 - [ ] Jaganath's replies and platform changes: docs/PLATFORM_HANDOVER.md
+
+## Known gaps and plan (2026-10-13)
+The defence detects, it does not prevent. What it cannot catch yet, with the plan agreed with Jeev:
+
+| Gap | Why it gets through | Status | Plan |
+|-----|---------------------|--------|------|
+| 1. Lies at the source: fake events, or a fake actor or time, before capture | We prove nothing changed after recording, not that the platform told the truth (trust model) | accepted | Cross-source check: a DB change with no matching web request within N seconds means SQL run directly, bypassing the app. Rule set in the profile, generic. Needs I3 collectors and the platform's real logs to tune; pitch headline |
+| 2. Silencing the source (audit triggers off, app logging off) | The sidecar stays alive and heartbeats, so no SILENCE; it just receives nothing | reasoned, untested | Witness challenge: the witness requests `GET /coc-canary/<random code>` from the platform at random times; nginx logs it (even as a 404); the access_log collector brings it into the chain; the heartbeat reports where; missing within ~10 s -> new alert SOURCE_SILENT, raised on the witness. No platform change for nginx. A DB canary needs Jaganath (collectors are read-only) |
+| 3. Stolen key + fake heartbeats (sidecar stopped, a script sends heartbeats with a frozen head) | The key is on the attacked host; root can always use it there. A TPM stops copying, not use | reasoned, untested | The witness challenge above: a frozen fake cannot answer a fresh code; beating it needs a modified copy of the whole pipeline. Ceiling: software on a host the attacker owns cannot fully stop root |
+| 4. Act fast: remove the newest entries before they are pinned | Really up to the SILENCE window (75 s): block the witness, delete, unblock | fix on branch | `contract-change-dynamic-heartbeat`: about 12 s while busy, 40 s after a quiet spell |
+| 5. Delete everything | Detected (TRUNCATION, SILENCE), but the witness holds hashes, not content | reasoned | Later: ship event content (or encrypted copies) off the host |
+| 6. Witness on the same host, or compromised | Everything rests on the witness being out of reach (RT-35) | accepted for one-laptop demo | Two-laptop setup; later several witnesses or a public anchor |
+| 7. Offline verify only | With the stolen key a re-signed log passes local checks | tested | Always verify with the witness |
+| 8. Reading the logs | Plain text; reading changes nothing | out of scope | Encryption at rest, a different problem |
+
+Order: (a) dynamic heartbeat (built, on its branch), (b) nginx access_log collector + witness challenge (starts I3 early with a stand-in nginx), (c) cross-source check, at least basic, before the meetup. At the meetup the teammate tries gaps 2 and 3 against the current images.
+
+Pitch angle (not new primitives: hash chains, Merkle checkpoints and a witness are how Certificate Transparency works): integration by profile, not code; the verifier names the attack; going quiet is itself an alarm; it shows what changed and the original value; it was red-teamed while built (RT-01 to RT-50). Candidate addition: a signed evidence report (`coc report`) for auditors.
 
 ## Later (out of scope for the base model, see AGENTS.md)
 - Per-entry MAC / key ratchet, external anchoring, forensics/evidence report, dashboard, innovation layer.

@@ -4,7 +4,7 @@
 
 services:
   sidecar:
-    image: ${COC_IMAGE_PREFIX:-ghcr.io/jeevikas-19}/coc-sidecar:${COC_TAG:-latest}
+    image: ${COC_IMAGE_PREFIX:-ghcr.io/hummingbirdj19-ship-it}/coc-sidecar:${COC_TAG:-latest}
     container_name: chain-of-custody-sidecar
     restart: unless-stopped
     volumes:
