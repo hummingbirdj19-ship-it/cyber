@@ -28,12 +28,14 @@ every_s = 60
 
 [heartbeat]
 interval_s = 30
+busy_interval_s = 2         # while new events arrive, beat every 2 s (0 = off; witness LATE needs it)
 witness_url = "http://localhost:8800"
 
 [witness]
 db_path = "data/witness.db"
 port = 8800
 nodes_file = "data/witness_nodes.toml"
+late_grace_s = 10           # LATE when a promised heartbeat is this many seconds overdue
 """
 
 _CONTROL_RE = re.compile(r"[\x00-\x1f\x7f]")

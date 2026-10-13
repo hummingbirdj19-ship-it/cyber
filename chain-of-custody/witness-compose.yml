@@ -1,6 +1,7 @@
 # Witness laptop: the witness only, from the published image. No clone and no config.toml needed.
 # In this folder: witness_nodes.toml, made with `coc trust <node_id> <public key>` (see docs/INTEGRATION.md).
 # COC_INTERVAL_S must equal the sidecar profile's [heartbeat] interval_s: SILENCE fires after 2 * interval + 15 s.
+# COC_LATE_GRACE_S (default 10): LATE fires when a heartbeat the sidecar promised is this many seconds overdue.
 # Open inbound TCP ${COC_WITNESS_PORT:-8800} in this laptop's firewall.
 
 services:
@@ -17,6 +18,8 @@ services:
       - ./witness_nodes.toml:/etc/coc/witness_nodes.toml:ro
     environment:
       - PYTHONUNBUFFERED=1
+      # An environment variable, not a flag, so this file still starts witness images from before v0.4
+      - COC_LATE_GRACE_S=${COC_LATE_GRACE_S:-10}
     command: ["python", "-m", "witness.app", "--host", "0.0.0.0", "--port", "8800",
               "--nodes-file", "/etc/coc/witness_nodes.toml", "--db-path", "/app/data/witness.db",
               "--interval-s", "${COC_INTERVAL_S:-30}"]

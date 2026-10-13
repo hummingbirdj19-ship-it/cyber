@@ -109,7 +109,7 @@ def test_sidecar_applies_the_same_localhost_rule(
 def test_witness_settings_precedence(tmp_path: Path) -> None:
     """Explicit flag, else profile, else default."""
     assert witness_settings() == {"interval_s": 30.0, "nodes_file": Path("data/witness_nodes.toml"),
-                                  "db_path": Path("data/witness.db"), "port": 8800}
+                                  "db_path": Path("data/witness.db"), "port": 8800, "late_grace_s": 10.0}
     cfg = tmp_path / "c.toml"
     cfg.write_text('[heartbeat]\ninterval_s = 10\n[witness]\nport = 9000\ndb_path = "x.db"\n', encoding="utf-8")
     s = witness_settings(cfg)

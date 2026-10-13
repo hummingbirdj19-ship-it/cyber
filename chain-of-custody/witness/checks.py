@@ -1,4 +1,4 @@
-"""Witness input validation and the five alert rules from CONTRACT.md section 5."""
+"""Witness input validation and the alert rules from CONTRACT.md section 5."""
 import re
 import sqlite3
 import tomllib
@@ -10,6 +10,8 @@ from tools.validate_spool import check_ts
 from witness import store
 
 HB_FIELDS = ("node_id", "hb_counter", "head_seq", "head_hash", "tree_size", "ts", "signature")
+HB_OPTIONAL = ("next_due_s",)  # v0.4: the sender's signed promise of its next heartbeat; absent from v0.3 sidecars
+MAX_NEXT_DUE_S = 3600
 CP_FIELDS = ("node_id", "tree_size", "head_seq", "head_hash", "root_hash", "ts", "signature")
 INT_FIELDS = ("hb_counter", "head_seq", "tree_size")
 HASH_FIELDS = ("head_hash", "root_hash")
@@ -37,12 +39,12 @@ def load_nodes(path: Path) -> dict[str, str]:
     return dict(nodes)
 
 
-def payload_errors(body: Any, fields: tuple[str, ...]) -> list[str]:
+def payload_errors(body: Any, fields: tuple[str, ...], optional: tuple[str, ...] = ()) -> list[str]:
     """Return strict shape errors for a heartbeat or checkpoint body; empty means well-formed."""
     if not isinstance(body, dict):
         return ["body must be a JSON object"]
     errors = [f"missing field '{f}'" for f in fields if f not in body]
-    errors += [f"unexpected field '{k}'" for k in body if k not in fields]
+    errors += [f"unexpected field '{k}'" for k in body if k not in fields and k not in optional]
     if errors:
         return errors
     for name in (n for n in INT_FIELDS if n in fields):
@@ -58,6 +60,10 @@ def payload_errors(body: Any, fields: tuple[str, ...]) -> list[str]:
         errors.append("'ts' must be YYYY-MM-DDTHH:MM:SSZ")
     if not isinstance(body["signature"], str) or len(body["signature"]) > 256:
         errors.append("'signature' must be a string of at most 256 characters")
+    if "next_due_s" in body:
+        v = body["next_due_s"]
+        if not isinstance(v, int) or isinstance(v, bool) or not 1 <= v <= MAX_NEXT_DUE_S:
+            errors.append(f"'next_due_s' must be an integer from 1 to {MAX_NEXT_DUE_S}")
     if errors:
         return errors
     is_heartbeat = "hb_counter" in fields
@@ -138,3 +144,24 @@ def silence_alert(
     if last_alert is not None and last_alert > reference:
         return None
     return _alert("SILENCE", f"no valid heartbeat for more than {window:g} seconds")
+
+
+def late_alert(
+    conn: sqlite3.Connection, node_id: str, now: float, grace_s: float, started_at: float
+) -> dict[str, str] | None:
+    """LATE once per streak: the newest fresh heartbeat promised the next within next_due_s, and it is overdue.
+
+    The promise is signed, so only the node key can make it. A heartbeat without one (a v0.3 sidecar)
+    never raises LATE; SILENCE still covers that node.
+    """
+    last = store.last_fresh_heartbeat(conn, node_id)
+    if last is None or last["next_due_s"] is None:
+        return None
+    reference = max(last["received_epoch"], started_at)
+    if now - reference <= last["next_due_s"] + grace_s:
+        return None
+    last_alert = store.last_alert_epoch(conn, node_id, "LATE")
+    if last_alert is not None and last_alert > reference:
+        return None
+    return _alert("LATE", f"next heartbeat was promised within {last['next_due_s']} s; "
+                          f"none for {now - reference:.0f} s (grace {grace_s:g} s)")

@@ -159,7 +159,7 @@ def verify_witness(conn: sqlite3.Connection, records: dict[str, list[dict[str, A
                                      f"local hash at seq {w_seq} ({row['hash']}) differs from witness ({min(w_hashes)})"))
 
     # The witness's own alerts are records of the node claiming another history, or going quiet.
-    alert_codes = {"FORK": "FORK", "SEQ_ROLLBACK": "TRUNCATION", "SILENCE": "SILENCE"}
+    alert_codes = {"FORK": "FORK", "SEQ_ROLLBACK": "TRUNCATION", "SILENCE": "SILENCE", "LATE": "LATE"}
     for a in records["alerts"]:
         code = alert_codes.get(a.get("code"))
         if code:

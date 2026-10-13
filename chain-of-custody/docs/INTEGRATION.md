@@ -65,13 +65,13 @@ Each laptop needs Docker and two files from this repo, nothing else. Windows use
 
 Witness laptop (a folder with `witness-compose.yml` and the wrapper):
 1. `coc trust node-1 <public key>`: the key comes from step 1 on the platform laptop. This writes `witness_nodes.toml` correctly (no Notepad, no BOM).
-2. `docker compose -f witness-compose.yml up -d`. Set `COC_INTERVAL_S` if the profile's `interval_s` is not 30.
+2. `docker compose -f witness-compose.yml up -d`. Set `COC_INTERVAL_S` if the profile's `interval_s` is not 30. `COC_LATE_GRACE_S` (default 10) is how many seconds a heartbeat the sidecar promised may be late before LATE.
 3. Open inbound TCP 8800 in the firewall. Note this laptop's IP address.
 
 Platform laptop (a folder with `sidecar-compose.yml` and the wrapper, next to the platform):
 1. `coc init --witness-url http://<witness laptop IP>:8800`. It prints the `coc trust` line for the witness laptop.
 2. Point the platform's spool at `spool/` here (or set `SPOOL_DIR`), then `docker compose -f sidecar-compose.yml up -d`.
-3. `coc check`: PASS, or WARN until the first heartbeat (30 s).
+3. `coc check`: PASS, or WARN until the first heartbeat (a few seconds).
 4. Audit: `coc verify --witness http://<witness laptop IP>:8800 --node-id node-1`. Exit 0 = clean, 1 = tampering, 2 = the check itself failed.
 
 Pin a version with `COC_TAG=sha-<commit>`. A fork publishes under its own owner: set `COC_IMAGE_PREFIX` (compose) and `COC_IMAGE` (wrappers).

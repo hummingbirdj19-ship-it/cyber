@@ -11,7 +11,8 @@ CREATE TABLE IF NOT EXISTS heartbeats (
     node_id TEXT NOT NULL, hb_counter INTEGER NOT NULL, head_seq INTEGER NOT NULL,
     head_hash TEXT NOT NULL, tree_size INTEGER NOT NULL, ts TEXT NOT NULL,
     signature TEXT NOT NULL, fresh INTEGER NOT NULL,
-    received_at TEXT NOT NULL, received_epoch REAL NOT NULL
+    received_at TEXT NOT NULL, received_epoch REAL NOT NULL,
+    next_due_s INTEGER
 );
 CREATE TABLE IF NOT EXISTS checkpoints (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -28,7 +29,7 @@ CREATE TABLE IF NOT EXISTS alerts (
 
 # Columns returned by the GET endpoints (internal ids and epochs stay private).
 COLUMNS = {
-    "heartbeats": "node_id, hb_counter, head_seq, head_hash, tree_size, ts, signature, received_at",
+    "heartbeats": "node_id, hb_counter, head_seq, head_hash, tree_size, ts, signature, next_due_s, received_at",
     "checkpoints": "node_id, tree_size, head_seq, head_hash, root_hash, ts, signature, received_at",
     "alerts": "node_id, code, detail, received_at",
 }
@@ -50,6 +51,9 @@ def connect(db_path: Path | str) -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL;")
     conn.executescript(SCHEMA + _insert_only_triggers())
+    columns = {r["name"] for r in conn.execute("PRAGMA table_info(heartbeats)")}
+    if "next_due_s" not in columns:  # a witness DB from before CONTRACT v0.4; its rows stay NULL
+        conn.execute("ALTER TABLE heartbeats ADD COLUMN next_due_s INTEGER")
     return conn
 
 
@@ -69,9 +73,9 @@ def insert_heartbeat(conn: sqlite3.Connection, hb: dict[str, Any], fresh: bool, 
     """Insert a signature-valid heartbeat; fresh means its counter was higher than any seen."""
     conn.execute(
         "INSERT INTO heartbeats (node_id, hb_counter, head_seq, head_hash, tree_size, ts, signature,"
-        " fresh, received_at, received_epoch) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        " fresh, received_at, received_epoch, next_due_s) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (hb["node_id"], hb["hb_counter"], hb["head_seq"], hb["head_hash"], hb["tree_size"],
-         hb["ts"], hb["signature"], int(fresh), received_at, epoch),
+         hb["ts"], hb["signature"], int(fresh), received_at, epoch, hb.get("next_due_s")),
     )
 
 
@@ -121,6 +125,14 @@ def highest_head_seq(conn: sqlite3.Connection, node_id: str) -> int | None:
 def last_fresh_epoch(conn: sqlite3.Connection, node_id: str) -> float | None:
     """Receive time of the newest heartbeat that advanced the counter."""
     return _scalar(conn, "SELECT MAX(received_epoch) FROM heartbeats WHERE node_id = ? AND fresh = 1", (node_id,))
+
+
+def last_fresh_heartbeat(conn: sqlite3.Connection, node_id: str) -> dict[str, Any] | None:
+    """The newest heartbeat that advanced the counter: its receive time and its promise."""
+    row = conn.execute(
+        "SELECT received_epoch, next_due_s FROM heartbeats WHERE node_id = ? AND fresh = 1 "
+        "ORDER BY received_epoch DESC, id DESC LIMIT 1", (node_id,)).fetchone()
+    return dict(row) if row else None
 
 
 def last_alert_epoch(conn: sqlite3.Connection, node_id: str, code: str) -> float | None:

@@ -1,10 +1,11 @@
-# CONTRACT v0.3 (DRAFT, awaiting platform integrator OK)
+# CONTRACT v0.4 (DRAFT, awaiting platform integrator OK)
 
 This is the only interface between the defence software (Chain of Custody) and any platform it protects. The defence is standalone and platform-agnostic: it never contains platform-specific code. A platform integrates by supplying a profile, which is a `config.toml` (section 7). The profile's collectors read the evidence the platform already leaves (log files, an audit table) and write RawEvents (section 2) to a spool file. A platform whose evidence no collector fits may write the spool with its own adapters instead. Same code and logic for every platform, only the profile differs.
 
 The defence repo holds the master copy of this file. Platform repos (for example the demo bank platform) pin a version of it.
 
 Changelog:
+- v0.4: dynamic heartbeat. While new entries arrive the sidecar beats every `busy_interval_s` (default 2 s), otherwise every `interval_s`. Each heartbeat may carry `next_due_s`, a signed promise of the next one; the witness raises the new alert `LATE` when a promise is more than `late_grace_s` (default 10 s) overdue, and the verifier reports it as a `LATE` verdict (sections 5 to 7). Defence-only: nothing changes for the platform. v0.3 sidecars and witnesses keep working with v0.4 ones (no `LATE` between them).
 - v0.3: generic collectors shipped with the defence and configured in the profile (`[[collectors]]`, section 7), so most platforms write no code. `db_audit` supports SQLite and PostgreSQL; `access_log` can map requests to event types with `rules`. `hb_counter` counts send attempts (section 5). The verifier also reports the witness's own FORK and SEQ_ROLLBACK alerts (section 6).
 - v0.2: platform-agnostic. Event types are open (any snake_case) with an optional per-profile allow-list. No floats anywhere in `details`. Added the `[profile]` config section. Two-repo change protocol.
 - v0.1: first version.
@@ -94,10 +95,13 @@ Checkpoint object:
 - A checkpoint is created every `every_n` entries or every `every_s` seconds, whichever comes first, if there is at least one new entry.
 
 ## 5. Heartbeat and witness API (sidecar -> witness)
-Heartbeat object, sent every `interval_s` seconds (default 30):
+Heartbeat object:
 ```
-{"node_id": "node-1", "hb_counter": 17, "head_seq": 212, "head_hash": "<hex>", "tree_size": 213, "ts": "<UTC>", "signature": "<hex>"}
+{"node_id": "node-1", "hb_counter": 17, "head_seq": 212, "head_hash": "<hex>", "tree_size": 213, "ts": "<UTC>", "next_due_s": 2, "signature": "<hex>"}
 ```
+- When it is sent: with `busy_interval_s` = 0, every `interval_s` seconds (default 30), as in v0.3. With `busy_interval_s` > 0 (default 2): a heartbeat as soon as the head has moved since the last one (checked every `busy_interval_s`), and otherwise when the last one's promise runs out. Entries arriving after a quiet spell are therefore reported within `busy_interval_s`, not at the next idle beat.
+- `next_due_s` (optional, integer 1 to 3600): the sender promises its next heartbeat within this many seconds. `busy_interval_s` (rounded up) when the head moved since the previous heartbeat, else `interval_s`. Left out when `busy_interval_s` is 0. It is signed with the rest, so only the node key can make or stretch a promise.
+- A v0.3 witness answers a heartbeat with `next_due_s` with 422 `unexpected field 'next_due_s'`. The sidecar then resends it without the field, with the same `hb_counter` (the 422 stored nothing), and sends plain heartbeats from then on.
 - `hb_counter` starts at 1 and increases by 1 per send attempt, so a failed send still uses up its number. The witness may therefore see gaps; a gap is not an alert. The counter never repeats or goes down. It is stored by the sidecar so it survives restarts.
 - `signature` works as for checkpoints.
 
@@ -114,6 +118,9 @@ Witness alert codes:
 - `SEQ_ROLLBACK`: `head_seq` is lower than the highest seen
 - `FORK`: same `head_seq` seen before with a different `head_hash`
 - `SILENCE`: no valid heartbeat for more than `2 * interval_s + 15` seconds
+- `LATE`: the newest fresh heartbeat promised the next within `next_due_s`, and none arrived for more than `next_due_s + late_grace_s` seconds (witness clock). Raised once per streak; a heartbeat without `next_due_s` never raises it. SILENCE still fires on its own window
+
+The witness checks LATE and SILENCE every 2 seconds.
 
 ## 6. Verifier output
 Command: `python -m verifier --config config.toml [--witness URL]`
@@ -133,6 +140,7 @@ Verdict codes:
 - `TRUNCATION` (needs witness): local `head_seq` is lower than the highest `head_seq` the witness has seen. Also reported when the witness raised `SEQ_ROLLBACK` for this node
 - `FORK` (needs witness): local entry hash at a `seq` the witness recorded differs from the witness's `head_hash` for that `seq`. Also reported when the witness raised `FORK` for this node
 - `SILENCE` (needs witness): the witness raised a silence alert in the checked period
+- `LATE` (needs witness): the witness raised a LATE alert: a promised heartbeat did not arrive in time
 
 ## 7. Config keys (the profile)
 See `config.example.toml`. One `config.toml` is one platform profile. Everything platform-dependent lives here and nowhere else. Read with Python's `tomllib`. Do not rename keys without the change protocol.
@@ -140,6 +148,10 @@ See `config.example.toml`. One `config.toml` is one platform profile. Everything
 `[profile]` section:
 - `name` (string): a label for the platform, for humans only. The defence never branches on it.
 - `event_types` (list of strings): optional allow-list as in section 2. Empty means any snake_case name.
+
+`[heartbeat]`: `interval_s` (integer, default 30), `busy_interval_s` (integer, default 2; 0 turns dynamic heartbeats off; otherwise less than `interval_s`), `witness_url` (string).
+
+`[witness]`: `db_path`, `port`, `nodes_file`, and `late_grace_s` (integer, at least 1, default 10).
 
 `[paths] collector_state_dir` (string, default `data/collectors`): where collectors keep their position, one file per collector.
 

@@ -232,7 +232,7 @@ footer { border-top: 1px solid var(--border); margin-top: 64px; padding: 24px 16
         <text class="t-head" x="706" y="88">Witness</text>
         <text class="t-muted" x="706" y="110">checks signatures, counters</text>
         <text class="t-muted" x="706" y="128">raises FORK, ROLLBACK,</text>
-        <text class="t-muted" x="706" y="146">SILENCE on its own clock</text>
+        <text class="t-muted" x="706" y="146">LATE, SILENCE on its own clock</text>
         <text class="t-muted" x="706" y="172">insert-only store</text>
 
         <path class="flow" d="M110,166 L110,204" marker-end="url(#ah)"/>
@@ -240,7 +240,7 @@ footer { border-top: 1px solid var(--border); margin-top: 64px; padding: 24px 16
         <path class="flow" d="M190,246 C220,246 225,150 248,140" marker-end="url(#ah)"/>
         <text class="t-muted" x="198" y="272">reads</text>
         <path class="flow" d="M450,110 L688,110" marker-end="url(#ah)"/>
-        <text class="t-muted" x="490" y="100">heartbeat every 30 s + checkpoints</text>
+        <text class="t-muted" x="462" y="100">heartbeats (2 s busy, 30 s idle) + checkpoints</text>
         <path class="flow" d="M350,204 L350,228" marker-end="url(#ah)"/>
         <path class="flow-dash" d="M688,170 C600,170 560,262 452,262" marker-end="url(#ah)"/>
         <text class="t-muted" x="470" y="300">verifier asks the witness</text>
@@ -259,6 +259,7 @@ footer { border-top: 1px solid var(--border); margin-top: 64px; padding: 24px 16
         <tr><td><span class="code-tag tag-bad">BAD_CHECKPOINT_SIGNATURE</span></td><td>Forged or altered a checkpoint</td><td>No</td></tr>
         <tr><td><span class="code-tag tag-bad">TRUNCATION</span></td><td>Deleted the newest entries</td><td>Yes</td></tr>
         <tr><td><span class="code-tag tag-bad">FORK</span></td><td>Rewrote the whole chain, even re-signed with the stolen local key</td><td>Yes</td></tr>
+        <tr><td><span class="code-tag tag-warn">LATE</span></td><td>Stopped the sidecar or cut it off: a heartbeat it promised is over 10 s late (about 12 s while events flow, 40 s when quiet)</td><td>Yes</td></tr>
         <tr><td><span class="code-tag tag-warn">SILENCE</span></td><td>Stopped the sidecar or cut it off: no heartbeat for over 75 s</td><td>Yes</td></tr>
       </tbody>
     </table></div>
@@ -273,7 +274,7 @@ footer { border-top: 1px solid var(--border); margin-top: 64px; padding: 24px 16
       <div class="callout warn">
         <strong>Limits, stated plainly</strong>
         <p>The defence proves logs were not changed <em>after</em> they were recorded. It cannot prove the platform told the truth in the first place.</p>
-        <p>The newest ~32 s of events (one heartbeat interval plus the send timeout) are not yet pinned and can be removed without a witness verdict.</p>
+        <p>The newest events are pinned at the witness within about 2 s while events flow. Deleting them before that means cutting the sidecar off, which raises LATE within about 12 s, or 40 s after a quiet spell.</p>
       </div>
     </div>
   </section>
@@ -381,7 +382,7 @@ chmod +x coc.sh
   <!-- ============================================================ DEMO -->
   <section id="demo">
     <h2>Demo script</h2>
-    <p class="sub">Run on the platform laptop after setup, with 200 test events in and a clean verify. Each attack is what an admin with database access could do; each verify adds the new verdict. Wait 45 s after the events go in so a heartbeat has pinned them.</p>
+    <p class="sub">Run on the platform laptop after setup, with 200 test events in and a clean verify. Each attack is what an admin with database access could do; each verify adds the new verdict. Wait 5 s after the events go in so a heartbeat has pinned them.</p>
 
     <div class="callout info"><strong>Shortcut</strong><p>The commands below are for Windows. On macOS/Linux, replace <code>.\coc.ps1</code> with <code>./coc.sh</code> and <code>"${PWD}:/work"</code> with <code>"$PWD":/work</code>.</p></div>
 
@@ -397,10 +398,10 @@ chmod +x coc.sh
         <p class="expect">Verify again: adds <span class="code-tag tag-bad">SEQ_GAP</span> at 120 (the hole), plus the broken link and the checkpoint that no longer matches.</p></li>
       <li><p class="step-title">Attack 3: cut off the newest events (190 onward).</p>
         <div class="code"><pre>docker run --rm -v "${PWD}:/work" -w /work ghcr.io/jeevikas-19/coc-sidecar:latest python -c "import sqlite3; c = sqlite3.connect('data/sidecar.db'); c.execute('DELETE FROM entries WHERE seq &gt;= 190'); c.commit()"</pre></div>
-        <p class="expect">Wait 35 s for the next heartbeat, verify again: adds <span class="code-tag tag-bad">TRUNCATION</span>. Locally the tail looks fine; only the witness knows there were 200.</p></li>
+        <p class="expect">Wait 5 s for the next heartbeat, verify again: adds <span class="code-tag tag-bad">TRUNCATION</span>. Locally the tail looks fine; only the witness knows there were 200.</p></li>
       <li><p class="step-title">Attack 4: switch the logging off.</p>
         <div class="code"><pre>docker compose -f sidecar-compose.yml stop sidecar</pre></div>
-        <p class="expect">Wait 2 minutes, verify again: adds <span class="code-tag tag-warn">SILENCE</span>. Then <code>docker compose -f sidecar-compose.yml start sidecar</code>.</p></li>
+        <p class="expect">Wait 2 minutes, verify again: adds <span class="code-tag tag-warn">LATE</span> (the promised heartbeat never came) and <span class="code-tag tag-warn">SILENCE</span>. Then <code>docker compose -f sidecar-compose.yml start sidecar</code>.</p></li>
     </ol>
 
     <details>
@@ -453,7 +454,7 @@ docker compose -f witness-compose.yml up -d</pre></div>
         <tr><td><code>[node]</code></td><td><code>node_id</code></td><td>Letters, digits, <code>. _ -</code>, up to 64; must match what the witness trusts</td></tr>
         <tr><td><code>[paths]</code></td><td><code>spool_path</code>, <code>db_path</code>, key paths</td><td>Keep relative, under <code>spool/</code> and <code>data/</code></td></tr>
         <tr><td><code>[checkpoint]</code></td><td><code>every_n</code>, <code>every_s</code></td><td>Signed checkpoint every 50 entries or 60 s</td></tr>
-        <tr><td><code>[heartbeat]</code></td><td><code>interval_s</code>, <code>witness_url</code></td><td>30 s; the witness laptop's address. Witness <code>COC_INTERVAL_S</code> must match</td></tr>
+        <tr><td><code>[heartbeat]</code></td><td><code>interval_s</code>, <code>busy_interval_s</code>, <code>witness_url</code></td><td>30 s when quiet, 2 s while events arrive (0 = always 30 s, no LATE); the witness laptop's address. Witness <code>COC_INTERVAL_S</code> must match <code>interval_s</code></td></tr>
       </tbody>
     </table></div>
     <p>Unknown keys and wrong types are errors with the key path (<code>heartbeat.intervl_s: unknown key</code>), so a typo never goes unnoticed. <code>coc check</code> reports them.</p>
@@ -485,8 +486,8 @@ docker compose -f witness-compose.yml up -d</pre></div>
       <p>Docker created a folder because <code>witness_nodes.toml</code> did not exist when the witness started. Delete the folder, run <code>coc trust</code>, start again.</p></details>
     <details><summary>The witness exits: TOML or "byte-order mark" error</summary>
       <p>The trust file was edited in Notepad and saved as "UTF-8 with BOM". Delete it and recreate it with <code>coc trust</code>.</p></details>
-    <details><summary>Verify says SILENCE, but nothing was attacked</summary>
-      <p>The sidecar was stopped for over 75 s, or the laptop slept, or the network dropped. The witness records it and keeps it: that is correct. For a fresh demo, use the reset in the demo section.</p>
+    <details><summary>Verify says LATE or SILENCE, but nothing was attacked</summary>
+      <p>The sidecar was stopped, or the laptop slept, or the network dropped: for over 10 s while events flowed (LATE) or over 75 s (SILENCE). The witness records it and keeps it: that is correct. On a flaky network, a larger <code>COC_LATE_GRACE_S</code> on the witness gives LATE more slack. For a fresh demo, use the reset in the demo section.</p>
       <p>If it happens constantly: the witness <code>COC_INTERVAL_S</code> differs from the profile's <code>interval_s</code>. They must be equal.</p></details>
     <details><summary>Two commands pasted on one line</summary>
       <p>Pasting <code>verify</code> and <code>echo</code> together makes the second an argument of the first ("unrecognized arguments"). Run one command per line.</p></details>
@@ -514,6 +515,7 @@ docker compose -f witness-compose.yml up -d</pre></div>
         <tr><td><code>COC_IMAGE</code></td><td><code>…/coc-sidecar:latest</code></td><td>Image the <code>coc</code> wrapper runs</td></tr>
         <tr><td><code>SPOOL_DIR</code></td><td><code>./spool</code></td><td>The platform's spool folder (sidecar, mounted read-only)</td></tr>
         <tr><td><code>COC_INTERVAL_S</code></td><td><code>30</code></td><td>Witness: must equal the profile's <code>interval_s</code></td></tr>
+        <tr><td><code>COC_LATE_GRACE_S</code></td><td><code>10</code></td><td>Witness: seconds of slack before LATE</td></tr>
         <tr><td><code>COC_WITNESS_PORT</code></td><td><code>8800</code></td><td>Witness: port on the laptop</td></tr>
       </tbody>
     </table></div>

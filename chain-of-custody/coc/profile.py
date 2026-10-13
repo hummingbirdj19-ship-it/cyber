@@ -138,7 +138,7 @@ def validate_profile(data: Any) -> tuple[dict[str, Any] | None, list[str]]:
 
     # [heartbeat]
     hb = data.get("heartbeat", {})
-    hb_out: dict[str, Any] = {"interval_s": 30, "witness_url": "http://localhost:8800"}
+    hb_out: dict[str, Any] = {"interval_s": 30, "busy_interval_s": 2, "witness_url": "http://localhost:8800"}
     if not isinstance(hb, dict):
         errors.append(f"heartbeat: expected table, got {type_name(hb)}")
     else:
@@ -151,6 +151,12 @@ def validate_profile(data: Any) -> tuple[dict[str, Any] | None, list[str]]:
                         errors.append("heartbeat.interval_s: must be greater than 0")
                     else:
                         hb_out[k] = v
+            elif k == "busy_interval_s":
+                if _check_type(v, "integer", "heartbeat.busy_interval_s", errors):
+                    if v < 0:
+                        errors.append("heartbeat.busy_interval_s: must be 0 (off) or greater")
+                    else:
+                        hb_out[k] = v
             elif k == "witness_url":
                 if _check_type(v, "string", "heartbeat.witness_url", errors):
                     if not re.fullmatch(r"https?://\S+", v):
@@ -158,12 +164,16 @@ def validate_profile(data: Any) -> tuple[dict[str, Any] | None, list[str]]:
                     else:
                         hb_out[k] = v
 
+    if 0 < hb_out["busy_interval_s"] and hb_out["busy_interval_s"] >= hb_out["interval_s"]:
+        errors.append("heartbeat.busy_interval_s: must be less than interval_s (or 0 to turn it off)")
+
     # [witness]
     wit = data.get("witness", {})
     wit_out: dict[str, Any] = {
         "db_path": "data/witness.db",
         "port": 8800,
         "nodes_file": "data/witness_nodes.toml",
+        "late_grace_s": 10,
     }
     if not isinstance(wit, dict):
         errors.append(f"witness: expected table, got {type_name(wit)}")
@@ -171,6 +181,12 @@ def validate_profile(data: Any) -> tuple[dict[str, Any] | None, list[str]]:
         for k, v in wit.items():
             if k not in wit_out:
                 errors.append(f"witness.{k}: unknown key")
+            elif k == "late_grace_s":
+                if _check_type(v, "integer", "witness.late_grace_s", errors):
+                    if v < 1:
+                        errors.append("witness.late_grace_s: must be at least 1")
+                    else:
+                        wit_out[k] = v
             elif k == "port":
                 if _check_type(v, "integer", "witness.port", errors):
                     if not 1 <= v <= 65535:

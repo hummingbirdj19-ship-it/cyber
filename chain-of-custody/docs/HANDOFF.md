@@ -13,7 +13,7 @@ Status key: [ ] todo, [~] in progress, [x] done, [!] red team broke it, needs fi
 - Open bugs: none known. Run pytest from chain-of-custody/: from the repo root 7 older packaging tests fail (they read files by relative path; not a code bug). Not yet verified: Linux file ownership of sidecar-written files (RT-38), coc.sh on a real Linux host (syntax-checked only)
 - Contract notes RT-24 (hb_counter per send attempt) and RT-28 (verifier reports witness FORK / SEQ_ROLLBACK alerts): folded into the CONTRACT v0.3 draft
 - New CLI flags (deployment overrides, profile keys unchanged): verifier `--node-id`, sidecar `--witness-url`, witness `--nodes-file`
-- Window between heartbeats: newest interval_s + 2.5 s of events (32.5 s at default) can be removed or rewritten with no witness verdict
+- Window between heartbeats: newest interval_s + 2.5 s of events (32.5 s at default) can be removed or rewritten with no witness verdict. Really up to the SILENCE window (75 s): root on the host can block the witness for under 75 s, delete unpinned entries, then unblock (failed sends only leave counter gaps). Branch `contract-change-dynamic-heartbeat` (CONTRACT v0.4) cuts this: heartbeats every 2 s while entries arrive, a signed `next_due_s` promise, and witness LATE when a promise is 10 s overdue (measured: LATE 11.9 s after stopping the sidecar mid-burst, 35 s when idle)
 - Interface assumptions about the platform: only CONTRACT.md v0.2. RawEvents arrive as JSONL in the spool file at `[paths] spool_path`; fields `source, ts, actor, event_type, details`; checked by `tools/validate_spool.py`.
 
 ## Trust model (what the red team may assume)
@@ -163,6 +163,15 @@ Red-team gate
 - [x] Witness interval differs from the sidecar's: documented. Window = 2 * witness interval + 15 s. Sidecar slower than the window (interval_s > 2 * W + 15): SILENCE between every heartbeat, false alarms. Sidecar faster than W: still works, but a stopped sidecar is noticed only after the witness's longer window. Keep COC_INTERVAL_S equal to the profile's interval_s
 - [x] Workflow: only `packages: write` + `contents: read`, no personal token, runs only on main and by hand (tested: only GITHUB_TOKEN, no pull_request trigger)
 
+## Contract change v0.4: dynamic heartbeat (branch `contract-change-dynamic-heartbeat`, not merged)
+- Why: the exposure window is the SILENCE window (75 s), not 32.5 s (see Current state). Gap list item "act fast before the next heartbeat"
+- What: `[heartbeat] busy_interval_s` (default 2, 0 = v0.3 behaviour). While the head moves the sidecar beats every 2 s promising `next_due_s = 2`; when quiet, one closing beat promises `interval_s`; a new entry after a quiet spell is reported within 2 s. `next_due_s` is signed. Witness: optional field (1 to 3600), stored, new alert LATE (`next_due_s + late_grace_s` overdue, once per streak, swept every 2 s), `late_grace_s` default 10 (profile, `--late-grace-s`, or `COC_LATE_GRACE_S`). Verifier: LATE verdict
+- Mixed versions: v0.3 sidecar + v0.4 witness works (no promise, no LATE). v0.4 sidecar + v0.3 witness: 422 `unexpected field 'next_due_s'`, the sidecar resends without it on the same counter and warns once (checked in Docker against the published `latest` witness)
+- Defence-only: the platform side changes nothing, but the change protocol still asks for Jaganath's OK before merging
+- Checked: 30 tests in tests/test_dynamic_heartbeat.py (7 sabotages, each caught); full suite on Windows and on Python 3.11 in the image. Real processes and Docker (branch code layered on the published images; Docker Hub was blocked here): busy 2 s promises, idle 30 s, no false alert in normal running; sidecar stopped mid-burst -> LATE 11.9 s, verify `LATE` exit 1, 26 entries intact; the guide's demo on branch images: baseline clean 5 s after the events, attacks 1-3 as written (TRUNCATION within 5 s), attack 4 LATE at 35 s and SILENCE at 69 s
+- Costs: at most one heartbeat per 2 s per node (43,200 rows/day at the witness, append-only); more false LATE on a flaky network (raise the grace); the heartbeat rate shows when the platform is busy
+- Does not help: a stolen key can promise anything (fake heartbeats, gap 3); the source going quiet (gap 2)
+
 ## I3: Collectors (waits for I0 approval)
 - [ ] Build (detail before starting)
 
@@ -241,5 +250,6 @@ Red-team gate
 | I1 | RT-47 coc.sh on Linux runs the container as root | WEAKENS: config.toml and keys root-owned on the host (RT-38 again). Fix: `--user "$(id -u):$(id -g)"` | 5662697 |
 | I1 | RT-48 `test_unreachable_witness_fails_quickly_with_checklist` ran `coc init` in the working directory | WEAKENS: every test run wrote a key pair and witness_nodes.toml into chain-of-custody/data, or into the repo root (not ignored there) when run from the root | 5662697 (test chdirs to tmp_path; root .gitignore added) |
 | I1 | RT-49 `--witness-url` with a control character (`\x01`) | NITPICK: passed the URL check and was written into config.toml | 5662697 |
+| v0.4 | RT-50 New witness-compose.yml with an older witness image (`COC_TAG` pinned, or main merged before the publish finishes) | BREAKS: the old image exits on `--late-grace-s` (unrecognized argument) and restarts in a loop, so there is no witness at all. Fix: pass it as `COC_LATE_GRACE_S` in the environment, which old images ignore; a test keeps the compose flags to the v0.3 set | contract-change-dynamic-heartbeat |
 
 Full detail (why it broke, plan, verification), all in docs/red-team/: RED_TEAM_D0_D4.md (RT-01 to RT-16, including nitpicks RT-09, RT-14 to RT-16) RED_TEAM_D5_D7.md (RT-17 to RT-27, including nitpicks RT-22, RT-27) and RED_TEAM_D8_D10.md (RT-28 to RT-38, plus RT-16 and RT-27 closed)

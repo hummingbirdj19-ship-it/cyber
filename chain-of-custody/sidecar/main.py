@@ -61,12 +61,14 @@ def run_sidecar(config_path: Path, witness_url_override: str | None = None) -> i
     hb_cfg = config.get("heartbeat", {})
     witness_url = witness_url_override or hb_cfg.get("witness_url")
     hb_interval_s = float(hb_cfg.get("interval_s", 30))
+    hb_busy_s = float(hb_cfg.get("busy_interval_s", 2))
     hb_thread = None
     if witness_url:
         witness_url, note = resolve_witness_url(witness_url)  # same rule as coc check (I2)
         if note:
             logger.info("Witness URL: %s", note)
-        logger.info("Starting heartbeat to witness at %s (interval: %ss)", witness_url, hb_interval_s)
+        logger.info("Starting heartbeat to witness at %s (interval: %ss, while busy: %s)", witness_url, hb_interval_s,
+                    f"{hb_busy_s:g}s" if hb_busy_s > 0 else "off")
         hb_thread = start_heartbeat_thread(
             db_path=db_path,
             node_id=config["node"]["node_id"],
@@ -74,6 +76,7 @@ def run_sidecar(config_path: Path, witness_url_override: str | None = None) -> i
             witness_url=witness_url,
             interval_s=hb_interval_s,
             stop_event=stop_event,
+            busy_interval_s=hb_busy_s,
         )
 
     exit_code = 0
